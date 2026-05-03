@@ -1,3 +1,5 @@
+import { Redis } from "@upstash/redis";
+
 export interface Sermon {
   id: string;
   date: string;
@@ -22,39 +24,30 @@ export interface LeaderboardEntry {
   recentScore: number;
 }
 
-// In-memory fallback (local dev / build time)
+// In-memory fallback for local dev (no Redis credentials)
 const mem: Record<string, string> = {};
 
-async function kvGet(key: string): Promise<string | null> {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return mem[key] ?? null;
-  try {
-    const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 0 },
+function getRedis(): Redis | null {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.result ?? null;
-  } catch {
-    return mem[key] ?? null;
   }
+  return null;
+}
+
+async function kvGet(key: string): Promise<string | null> {
+  const redis = getRedis();
+  if (!redis) return mem[key] ?? null;
+  const val = await redis.get<string>(key);
+  return val ?? null;
 }
 
 async function kvSet(key: string, value: string): Promise<void> {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) { mem[key] = value; return; }
-  try {
-    await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ value }),
-    });
-  } catch {
-    mem[key] = value;
-  }
+  const redis = getRedis();
+  if (!redis) { mem[key] = value; return; }
+  await redis.set(key, value);
 }
 
 export async function getSermons(): Promise<Sermon[]> {
