@@ -5,7 +5,7 @@ import SermonList from "@/components/SermonList";
 import LeaderboardComponent from "@/components/Leaderboard";
 import GuessFormWrapper from "@/components/GuessFormWrapper";
 
-export const revalidate = "force-dynamic";
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const [sermons, guesses, leaderboard] = await Promise.all([
