@@ -5,7 +5,9 @@ import { randomUUID } from "crypto";
 
 function checkAdmin(req: NextRequest): boolean {
   const key = req.headers.get("x-admin-key");
-  return key === process.env.ADMIN_KEY;
+  const expected = process.env.ADMIN_KEY;
+  console.log("Auth check — received:", key, "expected:", expected);
+  return key === expected;
 }
 
 export async function POST(req: NextRequest) {
@@ -27,7 +29,9 @@ export async function POST(req: NextRequest) {
     speaker: speaker || undefined,
   };
 
+  console.log("Saving sermon:", sermon);
   await addSermon(sermon);
+  console.log("Sermon saved successfully");
   return NextResponse.json({ success: true, sermon });
 }
 
