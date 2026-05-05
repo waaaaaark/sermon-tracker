@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { date, minutes, seconds, speaker, title } = body;
+  const { date, minutes, seconds } = body;
 
   if (!date || minutes == null || seconds == null) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -19,12 +19,9 @@ export async function POST(req: NextRequest) {
     id: randomUUID(),
     date,
     durationSeconds: Number(minutes) * 60 + Number(seconds),
-    speaker: speaker?.trim() || undefined,
-    title: title?.trim() || undefined,
   };
 
   const sermons = await getSermons();
-  // Replace if same date exists
   const idx = sermons.findIndex((s) => s.date === date);
   if (idx >= 0) sermons[idx] = { ...sermon, id: sermons[idx].id };
   else sermons.push(sermon);
