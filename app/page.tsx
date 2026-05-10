@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine
 } from "recharts";
-import Link from "next/link"; // add this at the top with other imports
+import HorseRace from "@/components/HorseRace";
 
 interface Sermon { id: string; date: string; durationSeconds: number; }
 interface Guess { name: string; guessSeconds: number; submittedAt: string; }
 interface Standing { name: string; points: number; guesses: number; wins: string[]; }
+interface LiveData { startedAt: number; date: string; }
+interface Resolution {
+  date: string; durationSeconds: number;
+  winner: string | null; winnerGuessSeconds: number | null;
+  resolvedAt: string;
+}
 
 const NAMES = ["Matt", "Marty", "Brendan", "Brandon", "Dave", "Guest"];
 const PLAYERS = ["Matt", "Marty", "Brendan", "Brandon", "Dave"];
@@ -48,7 +55,7 @@ function isGuessingOpen(dateStr: string): boolean {
   const now = new Date();
   const nowCT = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
   const [y, m, d] = dateStr.split("-").map(Number);
-  const cutoff = new Date(y, m - 1, d, 10, 30, 0);
+  const cutoff = new Date(y, m - 1, d, 10, 35, 0);
   return nowCT < cutoff;
 }
 
@@ -78,23 +85,19 @@ const inputStyle: React.CSSProperties = {
   color: "#1a1714", padding: "7px 10px", fontSize: 13, outline: "none",
   width: "100%", fontFamily: "'DM Mono', monospace",
 };
-
-const card: React.CSSProperties = {
-  background: "#fff", border: "1px solid #e2ddd8", borderRadius: 8,
-};
-
-const sectionLabel: React.CSSProperties = {
-  color: "#b5b0aa", fontSize: 10, letterSpacing: "0.1em",
-  textTransform: "uppercase", marginBottom: 16,
-};
+const card: React.CSSProperties = { background: "#fff", border: "1px solid #e2ddd8", borderRadius: 8 };
+const sectionLabel: React.CSSProperties = { color: "#b5b0aa", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 };
 
 export default function Home() {
   const isMobile = useIsMobile();
-  const pad = isMobile ? "16px" : "32px";
+  const pad2 = isMobile ? "16px" : "32px";
 
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
+  const [live, setLive] = useState<LiveData | null>(null);
+  const [liveGuesses, setLiveGuesses] = useState<Guess[]>([]);
+  const [resolution, setResolution] = useState<Resolution | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
@@ -113,23 +116,42 @@ export default function Home() {
 
   const nextSunday = getNextSunday();
   const open = isGuessingOpen(nextSunday);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [sRes, gRes, lRes] = await Promise.all([
+      const [sRes, gRes, lRes, lvRes, rRes] = await Promise.all([
         fetch("/api/sermons"),
         fetch(`/api/guesses?date=${nextSunday}`),
         fetch("/api/leaderboard"),
+        fetch("/api/live"),
+        fetch("/api/resolution"),
       ]);
-      const [s, g, l] = await Promise.all([sRes.json(), gRes.json(), lRes.json()]);
+      const [s, g, l, lv, r] = await Promise.all([sRes.json(), gRes.json(), lRes.json(), lvRes.json(), rRes.json()]);
       setSermons(Array.isArray(s) ? s : []);
       setGuesses(Array.isArray(g) ? g : []);
       setStandings(Array.isArray(l) ? l : []);
+      setLive(lv);
+      setResolution(r);
+
+      // If live, also fetch guesses for that sermon date
+      if (lv?.date) {
+        const lgRes = await fetch(`/api/guesses?date=${lv.date}`);
+        const lg = await lgRes.json();
+        setLiveGuesses(Array.isArray(lg) ? lg : []);
+      } else {
+        setLiveGuesses([]);
+      }
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, [nextSunday]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    // Poll every 5 seconds for live updates
+    pollRef.current = setInterval(load, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [load]);
 
   async function handleSaveSermon() {
     if (!sDate) { setFormErr("Date is required."); return; }
@@ -182,32 +204,32 @@ export default function Home() {
   const chartData = sorted.map(s => ({ ...s, minutes: s.durationSeconds / 60 }));
   const medals = ["🥇", "🥈", "🥉"];
 
-  // suppress unused warning
   void PLAYERS;
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f7f5f2" }}>
 
       {/* Header */}
-      <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `0 ${pad}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `0 ${pad2}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
           <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Sermon Log</span>
           {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
-            <Link href="/timer" style={{ color: "#8a837a", fontSize: 12, textDecoration: "none" }}>
-  ⏱ Timer
-</Link>
         </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setFormErr(""); }}
-          style={{ background: showForm ? "#f0ede9" : "#2d6a4f", color: showForm ? "#1a1714" : "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em", whiteSpace: "nowrap" }}
-        >
-          {showForm ? "Cancel" : "+ Add Sermon"}
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link href="/timer" style={{ color: "#8a837a", fontSize: 12, textDecoration: "none", padding: "6px 12px", border: "1px solid #e2ddd8", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}>
+            ⏱{!isMobile && " Timer"}
+          </Link>
+          <button
+            onClick={() => { setShowForm(!showForm); setFormErr(""); }}
+            style={{ background: showForm ? "#f0ede9" : "#2d6a4f", color: showForm ? "#1a1714" : "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>
+            {showForm ? "Cancel" : "+ Add Sermon"}
+          </button>
+        </div>
       </header>
 
       {/* Sermon entry form */}
       {showForm && (
-        <div style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `20px ${pad}` }}>
+        <div style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `20px ${pad2}` }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
             <Field label="Date">
               <input type="date" value={sDate} onChange={e => setSDate(e.target.value)} style={inputStyle} />
@@ -238,91 +260,126 @@ export default function Home() {
           <div style={{ color: "#b5b0aa", paddingTop: 80, textAlign: "center" }}>Loading…</div>
         ) : (
           <>
-            {/* ── Guess section ─────────────────────────────────── */}
-            <div style={{ ...card, padding: "24px", marginBottom: 24 }}>
-              <div style={sectionLabel}>This Sunday · {fmtDate(nextSunday)}</div>
+            {/* ── LIVE RACE ─────────────────────────────────────── */}
+            {live && liveGuesses.length > 0 && (
+              <div style={{ ...card, padding: "24px", marginBottom: 24, borderColor: "#c0392b", borderWidth: 1.5 }}>
+                <div style={{ ...sectionLabel, color: "#c0392b" }}>🔴 Sermon in progress</div>
+                <HorseRace startedAt={live.startedAt} guesses={liveGuesses} />
+              </div>
+            )}
 
-              {!open ? (
-                <p style={{ color: "#8a837a", fontSize: 13 }}>
-                  Guesses are closed — it&apos;s past 10:30 AM CT. Check back next week!
-                </p>
-              ) : gSuccess ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 24 }}>🎯</span>
+            {live && liveGuesses.length === 0 && (
+              <div style={{ ...card, padding: "24px", marginBottom: 24, borderColor: "#c0392b" }}>
+                <div style={{ ...sectionLabel, color: "#c0392b" }}>🔴 Sermon in progress</div>
+                <p style={{ color: "#8a837a", fontSize: 13 }}>Timer is running — no guesses were submitted for today so there&apos;s no race to show.</p>
+              </div>
+            )}
+
+            {/* ── RESULTS CARD ──────────────────────────────────── */}
+            {!live && resolution && (
+              <div style={{ ...card, padding: "24px", marginBottom: 24, background: "#f0faf4", borderColor: "#a8d5b5" }}>
+                <div style={{ ...sectionLabel, color: "#2d6a4f" }}>Last Sunday&apos;s result · {fmtDate(resolution.date)}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center" }}>
                   <div>
-                    <p style={{ color: "#2d6a4f", fontWeight: 600, fontSize: 14 }}>{gSuccess}</p>
-                    <button onClick={() => setGSuccess("")} style={{ background: "none", border: "none", color: "#b5b0aa", fontSize: 12, padding: 0, marginTop: 4, cursor: "pointer" }}>
-                      Change guess
-                    </button>
+                    <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Actual duration</div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 32, fontWeight: 800, color: "#1a1714", lineHeight: 1 }}>
+                      {fmtLabel(resolution.durationSeconds)}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    {resolution.winner ? (
+                      <>
+                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Winner 🏆</div>
+                        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
+                          {resolution.winner}
+                        </div>
+                        <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
+                          guessed {fmtLabel(resolution.winnerGuessSeconds!)} — {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s {resolution.winnerGuessSeconds! <= resolution.durationSeconds ? "under" : "over"}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Result</div>
+                        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "#8a837a" }}>No winner this week</div>
+                        <div style={{ color: "#b5b0aa", fontSize: 12, marginTop: 2 }}>Everyone guessed over — no points awarded</div>
+                      </>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <>
-                  <p style={{ color: "#8a837a", fontSize: 13, marginBottom: 20 }}>
-                    How long will the sermon be? Closest without going over wins. Guesses close at 10:30 AM CT.
-                  </p>
+              </div>
+            )}
 
-                  {guesses.length > 0 && (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-                      {guesses.map(g => (
-                        <div key={g.name} style={{ background: "#f0ede9", borderRadius: 6, padding: "6px 12px", fontSize: 12 }}>
-                          <span style={{ color: "#8a837a" }}>{g.name}</span>
-                          <span style={{ color: "#1a1714", marginLeft: 8, fontWeight: 600 }}>{fmtLabel(g.guessSeconds)}</span>
-                        </div>
-                      ))}
+            {/* ── Guess section ─────────────────────────────────── */}
+            {!live && (
+              <div style={{ ...card, padding: "24px", marginBottom: 24 }}>
+                <div style={sectionLabel}>This Sunday · {fmtDate(nextSunday)}</div>
+                {!open ? (
+                  <p style={{ color: "#8a837a", fontSize: 13 }}>Guesses are closed — it&apos;s past 10:35 AM CT. Check back next week!</p>
+                ) : gSuccess ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 24 }}>🎯</span>
+                    <div>
+                      <p style={{ color: "#2d6a4f", fontWeight: 600, fontSize: 14 }}>{gSuccess}</p>
+                      <button onClick={() => setGSuccess("")} style={{ background: "none", border: "none", color: "#b5b0aa", fontSize: 12, padding: 0, marginTop: 4, cursor: "pointer" }}>Change guess</button>
                     </div>
-                  )}
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <Field label="Who are you?">
-                      <select value={gName} onChange={e => setGName(e.target.value)}
-                        style={{ ...inputStyle, width: isMobile ? "100%" : 160 }}>
-                        <option value="">— select —</option>
-                        {NAMES.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </Field>
-
-                    <Field label="Your guess">
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px" }}>
-                          <input
-                            type="range" min={5} max={75} value={gMinutes}
-                            onChange={e => setGMinutes(parseInt(e.target.value))}
-                            style={{ width: "100%", accentColor: "#2d6a4f" }}
-                          />
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#b5b0aa" }}>
-                            <span>5m</span><span>75m</span>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ color: "#8a837a", fontSize: 13, marginBottom: 20 }}>
+                      How long will the sermon be? Closest without going over wins. Guesses close at 10:35 AM CT.
+                    </p>
+                    {guesses.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                        {guesses.map(g => (
+                          <div key={g.name} style={{ background: "#f0ede9", borderRadius: 6, padding: "6px 12px", fontSize: 12 }}>
+                            <span style={{ color: "#8a837a" }}>{g.name}</span>
+                            <span style={{ color: "#1a1714", marginLeft: 8, fontWeight: 600 }}>{fmtLabel(g.guessSeconds)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <Field label="Who are you?">
+                        <select value={gName} onChange={e => setGName(e.target.value)} style={{ ...inputStyle, width: isMobile ? "100%" : 160 }}>
+                          <option value="">— select —</option>
+                          {NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Your guess">
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px" }}>
+                            <input type="range" min={5} max={75} value={gMinutes}
+                              onChange={e => setGMinutes(parseInt(e.target.value))}
+                              style={{ width: "100%", accentColor: "#2d6a4f" }} />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#b5b0aa" }}>
+                              <span>5m</span><span>75m</span>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 22, color: "#1a1714", minWidth: 48 }}>{gMinutes}m</span>
+                            <select value={gSeconds} onChange={e => setGSeconds(parseInt(e.target.value))}
+                              style={{ ...inputStyle, width: 70, padding: "5px 6px" }}>
+                              {[0,5,10,15,20,25,30,35,40,45,50,55].map(s => (
+                                <option key={s} value={s}>{s.toString().padStart(2,"0")}s</option>
+                              ))}
+                            </select>
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 22, color: "#1a1714", minWidth: 48 }}>
-                            {gMinutes}m
-                          </span>
-                          <select value={gSeconds} onChange={e => setGSeconds(parseInt(e.target.value))}
-                            style={{ ...inputStyle, width: 70, padding: "5px 6px" }}>
-                            {[0,5,10,15,20,25,30,35,40,45,50,55].map(s => (
-                              <option key={s} value={s}>{s.toString().padStart(2,"0")}s</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </Field>
-
-                    <button onClick={handleGuess} disabled={gSubmitting}
-                      style={{ background: "#2d6a4f", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 12, fontWeight: 600, opacity: gSubmitting ? 0.6 : 1, width: isMobile ? "100%" : "auto", alignSelf: "flex-start" }}>
-                      {gSubmitting ? "Locking in…" : "Lock In Guess"}
-                    </button>
-                  </div>
-                  {gErr && <p style={{ color: "#c0392b", fontSize: 12, marginTop: 8 }}>{gErr}</p>}
-                </>
-              )}
-            </div>
+                      </Field>
+                      <button onClick={handleGuess} disabled={gSubmitting}
+                        style={{ background: "#2d6a4f", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 12, fontWeight: 600, opacity: gSubmitting ? 0.6 : 1, width: isMobile ? "100%" : "auto", alignSelf: "flex-start" }}>
+                        {gSubmitting ? "Locking in…" : "Lock In Guess"}
+                      </button>
+                    </div>
+                    {gErr && <p style={{ color: "#c0392b", fontSize: 12, marginTop: 8 }}>{gErr}</p>}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* ── Leaderboard + Stats ────────────────────────────── */}
             {sermons.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 24 }}>
-
-                {/* Leaderboard */}
                 <div style={{ ...card, padding: "24px" }}>
                   <div style={sectionLabel}>Leaderboard · Price is Right Rules</div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -351,7 +408,6 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Stats */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {[
                     { label: "Average", value: fmtLabel(Math.round(avg)), sub: `across ${sermons.length} sermons` },
@@ -359,12 +415,7 @@ export default function Home() {
                     { label: "Longest", value: longest ? fmtLabel(longest.durationSeconds) : "—", sub: longest ? fmtDate(longest.date) : "" },
                     { label: "Shortest", value: shortest ? fmtLabel(shortest.durationSeconds) : "—", sub: shortest ? fmtDate(shortest.date) : "" },
                   ].map((stat, i) => (
-                    <div key={i} style={{
-                      background: "#fff", border: "1px solid #e2ddd8", padding: "16px 20px",
-                      borderRadius: i === 0 ? "8px 8px 0 0" : i === 3 ? "0 0 8px 8px" : 0,
-                      borderTop: i > 0 ? "none" : "1px solid #e2ddd8",
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                    }}>
+                    <div key={i} style={{ background: "#fff", border: "1px solid #e2ddd8", padding: "16px 20px", borderRadius: i === 0 ? "8px 8px 0 0" : i === 3 ? "0 0 8px 8px" : 0, borderTop: i > 0 ? "none" : "1px solid #e2ddd8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ color: "#b5b0aa", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>{stat.label}</div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "#1a1714", lineHeight: 1 }}>{stat.value}</div>
@@ -421,7 +472,7 @@ export default function Home() {
               </div>
             )}
 
-            {sermons.length === 0 && (
+            {sermons.length === 0 && !live && (
               <div style={{ paddingTop: 40, textAlign: "center" }}>
                 <p style={{ color: "#8a837a", marginBottom: 8 }}>No sermons logged yet.</p>
                 <p style={{ color: "#b5b0aa", fontSize: 12 }}>Click &quot;+ Add Sermon&quot; to get started.</p>

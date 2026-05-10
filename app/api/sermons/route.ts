@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSermons, saveSermons, Sermon } from "@/lib/store";
+import { getSermons, saveSermons, Sermon, scoreSermon } from "@/lib/store";
 import { randomUUID } from "crypto";
 
 export async function GET() {
@@ -10,23 +10,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { date, minutes, seconds } = body;
-
   if (!date || minutes == null || seconds == null) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
-
-  const sermon: Sermon = {
-    id: randomUUID(),
-    date,
-    durationSeconds: Number(minutes) * 60 + Number(seconds),
-  };
-
+  const durationSeconds = Number(minutes) * 60 + Number(seconds);
+  const sermon: Sermon = { id: randomUUID(), date, durationSeconds };
   const sermons = await getSermons();
   const idx = sermons.findIndex((s) => s.date === date);
   if (idx >= 0) sermons[idx] = { ...sermon, id: sermons[idx].id };
   else sermons.push(sermon);
-
   await saveSermons(sermons);
+  // Score guesses and save resolution for front page display
+  await scoreSermon(date, durationSeconds);
   return NextResponse.json({ ok: true });
 }
 
