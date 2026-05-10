@@ -13,6 +13,17 @@ interface Standing { name: string; points: number; guesses: number; wins: string
 const NAMES = ["Matt", "Marty", "Brendan", "Brandon", "Dave", "Guest"];
 const PLAYERS = ["Matt", "Marty", "Brendan", "Brandon", "Dave"];
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
+
 function fmtLabel(s: number) {
   const m = Math.floor(s / 60);
   const sec = s % 60;
@@ -77,13 +88,14 @@ const sectionLabel: React.CSSProperties = {
 };
 
 export default function Home() {
-  // Data
+  const isMobile = useIsMobile();
+  const pad = isMobile ? "16px" : "32px";
+
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Sermon form
   const [showForm, setShowForm] = useState(false);
   const [sDate, setSDate] = useState("");
   const [sMinutes, setSMinutes] = useState(30);
@@ -91,7 +103,6 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
 
-  // Guess form
   const [gName, setGName] = useState("");
   const [gMinutes, setGMinutes] = useState(25);
   const [gSeconds, setGSeconds] = useState(0);
@@ -168,21 +179,23 @@ export default function Home() {
   const longest = sermons.length ? sermons.reduce((a, b) => a.durationSeconds > b.durationSeconds ? a : b) : null;
   const shortest = sermons.length ? sermons.reduce((a, b) => a.durationSeconds < b.durationSeconds ? a : b) : null;
   const chartData = sorted.map(s => ({ ...s, minutes: s.durationSeconds / 60 }));
-
   const medals = ["🥇", "🥈", "🥉"];
+
+  // suppress unused warning
+  void PLAYERS;
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f7f5f2" }}>
 
       {/* Header */}
-      <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `0 ${pad}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
           <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Sermon Log</span>
           {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setFormErr(""); }}
-          style={{ background: showForm ? "#f0ede9" : "#2d6a4f", color: showForm ? "#1a1714" : "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em" }}
+          style={{ background: showForm ? "#f0ede9" : "#2d6a4f", color: showForm ? "#1a1714" : "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em", whiteSpace: "nowrap" }}
         >
           {showForm ? "Cancel" : "+ Add Sermon"}
         </button>
@@ -190,7 +203,7 @@ export default function Home() {
 
       {/* Sermon entry form */}
       {showForm && (
-        <div style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: "20px 32px" }}>
+        <div style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `20px ${pad}` }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
             <Field label="Date">
               <input type="date" value={sDate} onChange={e => setSDate(e.target.value)} style={inputStyle} />
@@ -216,16 +229,14 @@ export default function Home() {
         </div>
       )}
 
-      <main style={{ flex: 1, padding: "32px 32px 64px", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, padding: isMobile ? "16px 16px 48px" : "32px 32px 64px", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
         {loading ? (
           <div style={{ color: "#b5b0aa", paddingTop: 80, textAlign: "center" }}>Loading…</div>
         ) : (
           <>
             {/* ── Guess section ─────────────────────────────────── */}
             <div style={{ ...card, padding: "24px", marginBottom: 24 }}>
-              <div style={sectionLabel}>
-                This Sunday · {fmtDate(nextSunday)}
-              </div>
+              <div style={sectionLabel}>This Sunday · {fmtDate(nextSunday)}</div>
 
               {!open ? (
                 <p style={{ color: "#8a837a", fontSize: 13 }}>
@@ -247,7 +258,6 @@ export default function Home() {
                     How long will the sermon be? Closest without going over wins. Guesses close at 10:30 AM CT.
                   </p>
 
-                  {/* Existing guesses */}
                   {guesses.length > 0 && (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
                       {guesses.map(g => (
@@ -259,29 +269,28 @@ export default function Home() {
                     </div>
                   )}
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <Field label="Who are you?">
-                      <select value={gName} onChange={e => setGName(e.target.value)} style={{ ...inputStyle, width: 160 }}>
+                      <select value={gName} onChange={e => setGName(e.target.value)}
+                        style={{ ...inputStyle, width: isMobile ? "100%" : 160 }}>
                         <option value="">— select —</option>
                         {NAMES.map(n => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </Field>
 
                     <Field label="Your guess">
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {/* Minute slider */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px" }}>
                           <input
                             type="range" min={5} max={75} value={gMinutes}
                             onChange={e => setGMinutes(parseInt(e.target.value))}
-                            style={{ width: 180, accentColor: "#2d6a4f" }}
+                            style={{ width: "100%", accentColor: "#2d6a4f" }}
                           />
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#b5b0aa" }}>
                             <span>5m</span><span>75m</span>
                           </div>
                         </div>
-                        {/* Fine tune seconds */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 22, color: "#1a1714", minWidth: 48 }}>
                             {gMinutes}m
                           </span>
@@ -296,7 +305,7 @@ export default function Home() {
                     </Field>
 
                     <button onClick={handleGuess} disabled={gSubmitting}
-                      style={{ background: "#2d6a4f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 12, fontWeight: 600, opacity: gSubmitting ? 0.6 : 1, marginBottom: 1 }}>
+                      style={{ background: "#2d6a4f", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 12, fontWeight: 600, opacity: gSubmitting ? 0.6 : 1, width: isMobile ? "100%" : "auto", alignSelf: "flex-start" }}>
                       {gSubmitting ? "Locking in…" : "Lock In Guess"}
                     </button>
                   </div>
@@ -305,9 +314,9 @@ export default function Home() {
               )}
             </div>
 
-            {/* ── Two column: leaderboard + stats ───────────────── */}
+            {/* ── Leaderboard + Stats ────────────────────────────── */}
             {sermons.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 24 }}>
 
                 {/* Leaderboard */}
                 <div style={{ ...card, padding: "24px" }}>
@@ -384,15 +393,15 @@ export default function Home() {
 
             {/* ── History table ──────────────────────────────────── */}
             {sermons.length > 0 && (
-              <div style={{ ...card, overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", borderBottom: "1px solid #e2ddd8", padding: "10px 20px" }}>
+              <div style={{ ...card, overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", borderBottom: "1px solid #e2ddd8", padding: "10px 20px", minWidth: 280 }}>
                   {["Date", "Duration", ""].map((h, i) => (
                     <span key={i} style={{ color: "#b5b0aa", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>{h}</span>
                   ))}
                 </div>
                 {[...sorted].reverse().map((s, i) => (
                   <div key={s.id}
-                    style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", padding: "12px 20px", borderBottom: i < sorted.length - 1 ? "1px solid #f0ede9" : "none", alignItems: "center" }}
+                    style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", padding: "12px 20px", borderBottom: i < sorted.length - 1 ? "1px solid #f0ede9" : "none", alignItems: "center", minWidth: 280 }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f7f5f2")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
