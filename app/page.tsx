@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine
 } from "recharts";
+import Link from "next/link"; // add this at the top with other imports
 
 interface Sermon { id: string; date: string; durationSeconds: number; }
 interface Guess { name: string; guessSeconds: number; submittedAt: string; }
@@ -192,6 +193,9 @@ export default function Home() {
         <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
           <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Sermon Log</span>
           {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
+            <Link href="/timer" style={{ color: "#8a837a", fontSize: 12, textDecoration: "none" }}>
+  ⏱ Timer
+</Link>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setFormErr(""); }}
