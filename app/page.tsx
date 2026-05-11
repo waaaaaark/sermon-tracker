@@ -48,8 +48,11 @@ function fmtShort(d: string) {
 function getNextSunday(): string {
   const d = new Date();
   const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? 7 : 7 - day));
-  return d.toISOString().split("T")[0];
+  d.setDate(d.getDate() + (day === 0 ? 0 : 7 - day));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 function isGuessingOpen(dateStr: string): boolean {
   const now = new Date();
