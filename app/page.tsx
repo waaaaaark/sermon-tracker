@@ -294,15 +294,11 @@ export default function Home() {
                           {resolution.winner}
                         </div>
                         <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
-                          guessed {fmtLabel(resolution.winnerGuessSeconds!)} — {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s {resolution.winnerGuessSeconds! <= resolution.durationSeconds ? "under" : "over"}
+                          guessed {fmtLabel(resolution.winnerGuessSeconds!)} — off by {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s
                         </div>
                       </>
                     ) : (
-                      <>
-                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Result</div>
-                        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "#8a837a" }}>No winner this week</div>
-                        <div style={{ color: "#b5b0aa", fontSize: 12, marginTop: 2 }}>Everyone guessed over — no points awarded</div>
-                      </>
+                      <div style={{ color: "#8a837a", fontSize: 13 }}>No guesses were submitted for this Sunday.</div>
                     )}
                   </div>
                 </div>
@@ -326,7 +322,7 @@ export default function Home() {
                 ) : (
                   <>
                     <p style={{ color: "#8a837a", fontSize: 13, marginBottom: 20 }}>
-                      How long will the sermon be? Closest without going over wins. Guesses close at 10:35 AM CT.
+                      How long will the sermon be? Closest guess wins — over or under. Guesses close at 10:35 AM CT.
                     </p>
                     {guesses.length > 0 && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
@@ -348,11 +344,12 @@ export default function Home() {
                       <Field label="Your guess">
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px" }}>
-                            <input type="range" min={5} max={75} value={gMinutes}
+                            <input
+                            type="range" min={5} max={45} value={gMinutes}
                               onChange={e => setGMinutes(parseInt(e.target.value))}
                               style={{ width: "100%", accentColor: "#2d6a4f" }} />
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#b5b0aa" }}>
-                              <span>5m</span><span>75m</span>
+                              <span>5m</span><span>45m</span>
                             </div>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -404,7 +401,7 @@ export default function Home() {
                     </tbody>
                   </table>
                   <p style={{ color: "#ccc8c2", fontSize: 10, marginTop: 12, fontStyle: "italic" }}>
-                    Closest without going over wins. Guest guesses don&apos;t count.
+                    Closest guess wins — over or under. Ties both get a point.
                   </p>
                 </div>
 

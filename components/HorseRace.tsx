@@ -8,16 +8,20 @@ interface Guess {
 }
 
 interface Props {
-  startedAt: number; // unix ms
+  startedAt: number;
   guesses: Guess[];
 }
 
-const HORSES = ["🐴", "🏇", "🦄", "🐎", "🐖"];
 const COLORS = ["#2d6a4f", "#c0392b", "#8e44ad", "#d4861a", "#2980b9"];
 
 function pad(n: number) { return n.toString().padStart(2, "0"); }
+function fmtLabel(s: number) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${pad(sec)}`;
+}
 
-export default function HorseRace({ startedAt, guesses }: Props) {
+export default function SermonRace({ startedAt, guesses }: Props) {
   const [nowMs, setNowMs] = useState(Date.now() - startedAt);
   const rafRef = useRef<number | null>(null);
 
@@ -34,18 +38,26 @@ export default function HorseRace({ startedAt, guesses }: Props) {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = Math.floor(elapsedSeconds % 60);
 
-  // Track width in seconds — show at least the furthest guess + 10% buffer
-  const maxGuess = Math.max(...guesses.map(g => g.guessSeconds), 60);
-  const trackMax = Math.max(maxGuess * 1.15, elapsedSeconds * 1.1, 120);
+  // Track range: 0 to furthest guess + 20% buffer, minimum 40 minutes
+  const maxGuess = Math.max(...guesses.map(g => g.guessSeconds));
+  const trackMax = Math.max(maxGuess * 1.2, 2400); // at least 40 min
+  const elapsedClamped = Math.min(elapsedSeconds, trackMax);
 
-  // Sort guesses by time (shortest first = bottom of leaderboard right now)
+  // Sort guesses for consistent color assignment
   const sorted = [...guesses].sort((a, b) => a.guessSeconds - b.guessSeconds);
 
+  // Find who's currently winning (closest to elapsed)
+  const currentLeader = sorted.reduce((best, g) => {
+    const diff = Math.abs(g.guessSeconds - elapsedSeconds);
+    const bestDiff = Math.abs(best.guessSeconds - elapsedSeconds);
+    return diff < bestDiff ? g : best;
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Elapsed clock */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "baseline" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
         <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: "#1a1714", lineHeight: 1, letterSpacing: "-0.02em" }}>
           {pad(minutes)}:{pad(seconds)}
         </span>
@@ -56,87 +68,143 @@ export default function HorseRace({ startedAt, guesses }: Props) {
         </span>
       </div>
 
-      {/* Race tracks */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {sorted.map((guess, i) => {
-          const horseProgress = Math.min(elapsedSeconds / trackMax, 1);
-          const finishLinePos = guess.guessSeconds / trackMax;
-          const isEliminated = elapsedSeconds > guess.guessSeconds;
-          const horseEmoji = HORSES[i % HORSES.length];
-          const color = COLORS[i % COLORS.length];
+      {/* Number line */}
+      <div style={{ position: "relative", paddingBottom: 48 }}>
 
-          return (
-            <div key={guess.name}>
-              {/* Name + guess */}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: isEliminated ? "#ccc8c2" : "#1a1714" }}>
-                  {guess.name}
-                  {isEliminated && <span style={{ marginLeft: 6, fontSize: 10, color: "#c0392b" }}>eliminated</span>}
-                </span>
-                <span style={{ fontSize: 11, color: "#b5b0aa" }}>
-                  guessed {Math.floor(guess.guessSeconds / 60)}m {guess.guessSeconds % 60 > 0 ? (guess.guessSeconds % 60) + "s" : ""}
-                </span>
-              </div>
+        {/* Track */}
+        <div style={{ position: "relative", height: 6, background: "#f0ede9", borderRadius: 3, margin: "32px 0 0" }}>
 
-              {/* Track */}
-              <div style={{ position: "relative", height: 40, background: isEliminated ? "#fafafa" : "#f0ede9", borderRadius: 8, overflow: "hidden", border: `1px solid ${isEliminated ? "#e8e8e8" : "#e2ddd8"}` }}>
+          {/* Elapsed fill */}
+          <div style={{
+            position: "absolute", left: 0, top: 0, bottom: 0,
+            width: `${(elapsedClamped / trackMax) * 100}%`,
+            background: "linear-gradient(90deg, #e2ddd8, #ccc8c2)",
+            borderRadius: 3,
+            transition: "width 0.1s linear",
+          }} />
 
-                {/* Finish line (guess position) */}
+          {/* Guess pins */}
+          {sorted.map((g, i) => {
+            const pct = (g.guessSeconds / trackMax) * 100;
+            const diff = Math.abs(g.guessSeconds - elapsedSeconds);
+            const isLeading = g.name === currentLeader.name;
+            const isPassed = elapsedSeconds > g.guessSeconds + 30; // 30s grace
+            const color = COLORS[i % COLORS.length];
+
+            return (
+              <div key={g.name} style={{ position: "absolute", left: `${pct}%`, top: "50%", transform: "translate(-50%, -50%)", zIndex: 3 }}>
+                {/* Vertical line down to label */}
                 <div style={{
                   position: "absolute",
-                  left: `${finishLinePos * 100}%`,
-                  top: 0, bottom: 0,
-                  width: 2,
-                  background: isEliminated ? "#e2ddd8" : color,
-                  opacity: isEliminated ? 0.4 : 0.6,
-                  zIndex: 2,
+                  left: "50%", top: 3,
+                  width: 1.5,
+                  height: 24,
+                  background: isPassed ? "#ccc8c2" : color,
+                  transform: "translateX(-50%)",
+                  opacity: isPassed ? 0.4 : 1,
                 }} />
-                {/* Finish line flag */}
+                {/* Pin dot */}
+                <div style={{
+                  width: isLeading ? 16 : 12,
+                  height: isLeading ? 16 : 12,
+                  borderRadius: "50%",
+                  background: isPassed ? "#e2ddd8" : color,
+                  border: `2px solid ${isPassed ? "#ccc8c2" : color}`,
+                  boxShadow: isLeading ? `0 0 0 3px ${color}33` : "none",
+                  transition: "all 0.2s",
+                  position: "relative", zIndex: 4,
+                }} />
+                {/* Label below */}
                 <div style={{
                   position: "absolute",
-                  left: `calc(${finishLinePos * 100}% + 3px)`,
-                  top: 4,
-                  fontSize: 10,
-                  color: isEliminated ? "#ccc8c2" : color,
-                  opacity: isEliminated ? 0.5 : 1,
-                  zIndex: 3,
+                  top: 28,
+                  left: "50%",
+                  transform: "translateX(-50%)",
                   whiteSpace: "nowrap",
-                }}>🏁</div>
-
-                {/* Progress fill */}
-                <div style={{
-                  position: "absolute",
-                  left: 0, top: 0, bottom: 0,
-                  width: `${horseProgress * 100}%`,
-                  background: isEliminated
-                    ? "linear-gradient(90deg, #f0f0f0, #e8e8e8)"
-                    : `linear-gradient(90deg, ${color}22, ${color}44)`,
-                  transition: "width 0.1s linear",
-                  zIndex: 1,
-                }} />
-
-                {/* Horse emoji */}
-                <div style={{
-                  position: "absolute",
-                  left: `calc(${Math.min(horseProgress, finishLinePos / 1) * 100}% - 20px)`,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  fontSize: 22,
-                  zIndex: 4,
-                  filter: isEliminated ? "grayscale(100%) opacity(0.4)" : "none",
-                  transition: "left 0.1s linear",
+                  textAlign: "center",
                 }}>
-                  {horseEmoji}
+                  <div style={{ fontSize: 11, fontWeight: isLeading ? 700 : 500, color: isPassed ? "#ccc8c2" : color }}>
+                    {g.name}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#b5b0aa", marginTop: 1 }}>{fmtLabel(g.guessSeconds)}</div>
+                  {isLeading && !isPassed && (
+                    <div style={{ fontSize: 9, color: color, marginTop: 1, letterSpacing: "0.04em" }}>
+                      ±{Math.round(diff)}s
+                    </div>
+                  )}
                 </div>
               </div>
+            );
+          })}
+
+          {/* Elapsed time needle */}
+          <div style={{
+            position: "absolute",
+            left: `${(elapsedClamped / trackMax) * 100}%`,
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 5,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}>
+            {/* Time label above needle */}
+            <div style={{
+              position: "absolute",
+              bottom: 14,
+              background: "#1a1714",
+              color: "#fff",
+              fontSize: 10,
+              fontFamily: "'DM Mono', monospace",
+              fontWeight: 600,
+              padding: "2px 6px",
+              borderRadius: 4,
+              whiteSpace: "nowrap",
+            }}>
+              {pad(minutes)}:{pad(seconds)}
             </div>
-          );
-        })}
+            {/* Needle line */}
+            <div style={{
+              width: 2,
+              height: 28,
+              background: "#1a1714",
+              borderRadius: 1,
+            }} />
+            {/* Triangle pointer */}
+            <div style={{
+              width: 0, height: 0,
+              borderLeft: "5px solid transparent",
+              borderRight: "5px solid transparent",
+              borderTop: "6px solid #1a1714",
+            }} />
+          </div>
+        </div>
+
+        {/* Time axis labels */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 64, paddingTop: 4 }}>
+          {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+            const s = Math.round(pct * trackMax);
+            return (
+              <span key={pct} style={{ fontSize: 10, color: "#ccc8c2", fontFamily: "'DM Mono', monospace" }}>
+                {Math.floor(s / 60)}m
+              </span>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ marginTop: 16, fontSize: 11, color: "#b5b0aa", fontStyle: "italic" }}>
-        🏁 = each person&apos;s guess · horse stops at their guess · eliminated if sermon passes their guess
+      {/* Who's winning callout */}
+      <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 18 }}>🎯</span>
+        <div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1714" }}>{currentLeader.name} </span>
+          <span style={{ fontSize: 13, color: "#8a837a" }}>
+            is closest — guessed {fmtLabel(currentLeader.guessSeconds)}, currently{" "}
+            {elapsedSeconds < currentLeader.guessSeconds
+              ? `${Math.round(currentLeader.guessSeconds - elapsedSeconds)}s away`
+              : `${Math.round(elapsedSeconds - currentLeader.guessSeconds)}s past`}
+          </span>
+        </div>
       </div>
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>

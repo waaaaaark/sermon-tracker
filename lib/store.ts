@@ -123,10 +123,9 @@ export async function getLeaderboard(): Promise<Standing[]> {
     const guesses = await getGuesses(sermon.date);
     const playerGuesses = guesses.filter(g => PLAYERS.includes(g.name));
     for (const g of playerGuesses) standings.get(g.name)!.guesses++;
-    const valid = playerGuesses.filter(g => g.guessSeconds <= sermon.durationSeconds);
-    if (valid.length === 0) continue;
-    const best = Math.max(...valid.map(g => g.guessSeconds));
-    for (const w of valid.filter(g => g.guessSeconds === best)) {
+    if (playerGuesses.length === 0) continue;
+    const minDiff = Math.min(...playerGuesses.map(g => Math.abs(g.guessSeconds - sermon.durationSeconds)));
+    for (const w of playerGuesses.filter(g => Math.abs(g.guessSeconds - sermon.durationSeconds) === minDiff)) {
       const s = standings.get(w.name)!;
       s.points++;
       s.wins.push(sermon.date);
@@ -141,16 +140,15 @@ export async function scoreSermon(date: string, durationSeconds: number): Promis
   const PLAYER_NAMES = ["Matt", "Marty", "Brendan", "Brandon", "Dave"];
   const guesses = await getGuesses(date);
   const playerGuesses = guesses.filter(g => PLAYER_NAMES.includes(g.name));
-  const valid = playerGuesses.filter(g => g.guessSeconds <= durationSeconds);
   
   let winner: string | null = null;
   let winnerGuessSeconds: number | null = null;
-  
-  if (valid.length > 0) {
-    const best = Math.max(...valid.map(g => g.guessSeconds));
-    const winners = valid.filter(g => g.guessSeconds === best);
+
+  if (playerGuesses.length > 0) {
+    const minDiff = Math.min(...playerGuesses.map(g => Math.abs(g.guessSeconds - durationSeconds)));
+    const winners = playerGuesses.filter(g => Math.abs(g.guessSeconds - durationSeconds) === minDiff);
     winner = winners.map(g => g.name).join(" & ");
-    winnerGuessSeconds = best;
+    winnerGuessSeconds = winners[0].guessSeconds;
   }
 
   const resolution: Resolution = {
