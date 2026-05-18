@@ -9,19 +9,21 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { date, minutes, seconds } = body;
+  const { date, minutes, seconds, hadChildrensSermon } = body;
   if (!date || minutes == null || seconds == null) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
   const durationSeconds = Number(minutes) * 60 + Number(seconds);
-  const sermon: Sermon = { id: randomUUID(), date, durationSeconds };
+  // hadChildrensSermon: true | false | null (not provided)
+  const childrens = hadChildrensSermon === true ? true : hadChildrensSermon === false ? false : null;
+
+  const sermon: Sermon = { id: randomUUID(), date, durationSeconds, hadChildrensSermon: childrens };
   const sermons = await getSermons();
   const idx = sermons.findIndex((s) => s.date === date);
   if (idx >= 0) sermons[idx] = { ...sermon, id: sermons[idx].id };
   else sermons.push(sermon);
   await saveSermons(sermons);
-  // Score guesses and save resolution for front page display
-  await scoreSermon(date, durationSeconds);
+  await scoreSermon(date, durationSeconds, childrens);
   return NextResponse.json({ ok: true });
 }
 

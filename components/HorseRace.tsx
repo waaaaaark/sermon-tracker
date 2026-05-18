@@ -15,9 +15,9 @@ interface Props {
 const COLORS = ["#2d6a4f", "#c0392b", "#8e44ad", "#d4861a", "#2980b9"];
 
 function pad(n: number) { return n.toString().padStart(2, "0"); }
-function fmtLabel(s: number) {
+function fmtMSS(s: number) {
   const m = Math.floor(s / 60);
-  const sec = s % 60;
+  const sec = Math.round(s % 60);
   return `${m}:${pad(sec)}`;
 }
 
@@ -35,31 +35,40 @@ export default function SermonRace({ startedAt, guesses }: Props) {
   }, [startedAt]);
 
   const elapsedSeconds = nowMs / 1000;
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = Math.floor(elapsedSeconds % 60);
+  const elapsedMin = Math.floor(elapsedSeconds / 60);
+  const elapsedSec = Math.floor(elapsedSeconds % 60);
 
-  // Track range: 0 to furthest guess + 20% buffer, minimum 40 minutes
-  const maxGuess = Math.max(...guesses.map(g => g.guessSeconds));
-  const trackMax = Math.max(maxGuess * 1.2, 2400); // at least 40 min
-  const elapsedClamped = Math.min(elapsedSeconds, trackMax);
-
-  // Sort guesses for consistent color assignment
   const sorted = [...guesses].sort((a, b) => a.guessSeconds - b.guessSeconds);
 
-  // Find who's currently winning (closest to elapsed)
+  // Window: min guess - 5min to max guess + 5min
+  const BUFFER = 300; // 5 minutes
+  const minGuess = Math.min(...sorted.map(g => g.guessSeconds));
+  const maxGuess = Math.max(...sorted.map(g => g.guessSeconds));
+  const windowStart = Math.max(0, minGuess - BUFFER);
+  const windowEnd = maxGuess + BUFFER;
+  const windowSize = windowEnd - windowStart;
+
+  // Convert a time (seconds) to a % position within the window
+  // Returns null if outside the window (needle will be off-screen)
+  function toWindowPct(sec: number): number {
+    return ((sec - windowStart) / windowSize) * 100;
+  }
+
+  const needlePct = toWindowPct(elapsedSeconds);
+  const needleVisible = needlePct >= -5 && needlePct <= 105; // small grace margin
+
+  // Who's currently winning
   const currentLeader = sorted.reduce((best, g) => {
-    const diff = Math.abs(g.guessSeconds - elapsedSeconds);
-    const bestDiff = Math.abs(best.guessSeconds - elapsedSeconds);
-    return diff < bestDiff ? g : best;
+    return Math.abs(g.guessSeconds - elapsedSeconds) < Math.abs(best.guessSeconds - elapsedSeconds) ? g : best;
   });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Elapsed clock */}
+      {/* Clock + live badge */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-        <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 42, fontWeight: 800, color: "#1a1714", lineHeight: 1, letterSpacing: "-0.02em" }}>
-          {pad(minutes)}:{pad(seconds)}
+        <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 48, fontWeight: 800, color: "#1a1714", lineHeight: 1, letterSpacing: "-0.02em" }}>
+          {pad(elapsedMin)}:{pad(elapsedSec)}
         </span>
         <span style={{ color: "#b5b0aa", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" }}>elapsed</span>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
@@ -68,138 +77,88 @@ export default function SermonRace({ startedAt, guesses }: Props) {
         </span>
       </div>
 
-      {/* Number line */}
-      <div style={{ position: "relative", paddingBottom: 48 }}>
+      {/* Pre-window status */}
+      {!needleVisible && elapsedSeconds < windowStart && (
+        <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "10px 16px", fontSize: 12, color: "#8a837a" }}>
+          ⏳ Earliest guess is {fmtMSS(minGuess)} — needle enters view in ~{Math.ceil((windowStart - elapsedSeconds) / 60)}m
+        </div>
+      )}
 
-        {/* Track */}
-        <div style={{ position: "relative", height: 6, background: "#f0ede9", borderRadius: 3, margin: "32px 0 0" }}>
-
-          {/* Elapsed fill */}
-          <div style={{
-            position: "absolute", left: 0, top: 0, bottom: 0,
-            width: `${(elapsedClamped / trackMax) * 100}%`,
-            background: "linear-gradient(90deg, #e2ddd8, #ccc8c2)",
-            borderRadius: 3,
-            transition: "width 0.1s linear",
-          }} />
+      {/* Timeline */}
+      <div style={{ position: "relative", overflow: "hidden", padding: "40px 0 56px" }}>
+        {/* Track bar */}
+        <div style={{ position: "relative", height: 6, background: "#f0ede9", borderRadius: 3 }}>
 
           {/* Guess pins */}
           {sorted.map((g, i) => {
-            const pct = (g.guessSeconds / trackMax) * 100;
-            const diff = Math.abs(g.guessSeconds - elapsedSeconds);
-            const isLeading = g.name === currentLeader.name;
-            const isPassed = elapsedSeconds > g.guessSeconds + 30; // 30s grace
+            const pct = toWindowPct(g.guessSeconds);
+            const isLeader = g.name === currentLeader.name;
+            const isPast = elapsedSeconds > g.guessSeconds + 15;
             const color = COLORS[i % COLORS.length];
+            const diff = Math.abs(g.guessSeconds - elapsedSeconds);
 
             return (
               <div key={g.name} style={{ position: "absolute", left: `${pct}%`, top: "50%", transform: "translate(-50%, -50%)", zIndex: 3 }}>
-                {/* Vertical line down to label */}
-                <div style={{
-                  position: "absolute",
-                  left: "50%", top: 3,
-                  width: 1.5,
-                  height: 24,
-                  background: isPassed ? "#ccc8c2" : color,
-                  transform: "translateX(-50%)",
-                  opacity: isPassed ? 0.4 : 1,
-                }} />
-                {/* Pin dot */}
-                <div style={{
-                  width: isLeading ? 16 : 12,
-                  height: isLeading ? 16 : 12,
-                  borderRadius: "50%",
-                  background: isPassed ? "#e2ddd8" : color,
-                  border: `2px solid ${isPassed ? "#ccc8c2" : color}`,
-                  boxShadow: isLeading ? `0 0 0 3px ${color}33` : "none",
-                  transition: "all 0.2s",
-                  position: "relative", zIndex: 4,
-                }} />
-                {/* Label below */}
-                <div style={{
-                  position: "absolute",
-                  top: 28,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  whiteSpace: "nowrap",
-                  textAlign: "center",
-                }}>
-                  <div style={{ fontSize: 11, fontWeight: isLeading ? 700 : 500, color: isPassed ? "#ccc8c2" : color }}>
-                    {g.name}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#b5b0aa", marginTop: 1 }}>{fmtLabel(g.guessSeconds)}</div>
-                  {isLeading && !isPassed && (
-                    <div style={{ fontSize: 9, color: color, marginTop: 1, letterSpacing: "0.04em" }}>
-                      ±{Math.round(diff)}s
-                    </div>
+                {/* Stem up */}
+                <div style={{ position: "absolute", left: "50%", bottom: 6, width: 2, height: 28, background: isPast ? "#ccc8c2" : color, transform: "translateX(-50%)", opacity: isPast ? 0.4 : 1 }} />
+                {/* Label above */}
+                <div style={{ position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
+                  <div style={{ fontSize: 11, fontWeight: isLeader ? 700 : 500, color: isPast ? "#ccc8c2" : color, marginBottom: 1 }}>{g.name}</div>
+                  <div style={{ fontSize: 10, color: "#b5b0aa" }}>{fmtMSS(g.guessSeconds)}</div>
+                  {isLeader && !isPast && (
+                    <div style={{ fontSize: 9, color: color, marginTop: 1 }}>±{Math.round(diff)}s</div>
                   )}
                 </div>
+                {/* Pin dot */}
+                <div style={{
+                  width: isLeader ? 16 : 12, height: isLeader ? 16 : 12, borderRadius: "50%",
+                  background: isPast ? "#e2ddd8" : color,
+                  border: `2px solid ${isPast ? "#ccc8c2" : color}`,
+                  boxShadow: isLeader && !isPast ? `0 0 0 4px ${color}25` : "none",
+                  transition: "all 0.2s", position: "relative", zIndex: 4,
+                }} />
               </div>
             );
           })}
 
-          {/* Elapsed time needle */}
-          <div style={{
-            position: "absolute",
-            left: `${(elapsedClamped / trackMax) * 100}%`,
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 5,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}>
-            {/* Time label above needle */}
+          {/* Elapsed needle — clipped to track, slides in from left */}
+          {needleVisible && (
             <div style={{
               position: "absolute",
-              bottom: 14,
-              background: "#1a1714",
-              color: "#fff",
-              fontSize: 10,
-              fontFamily: "'DM Mono', monospace",
-              fontWeight: 600,
-              padding: "2px 6px",
-              borderRadius: 4,
-              whiteSpace: "nowrap",
+              left: `${Math.max(0, Math.min(100, needlePct))}%`,
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 5,
+              display: "flex", flexDirection: "column", alignItems: "center",
+              transition: "left 0.15s linear",
             }}>
-              {pad(minutes)}:{pad(seconds)}
+              {/* Label below needle */}
+              <div style={{ position: "absolute", top: 18, background: "#1a1714", color: "#fff", fontSize: 10, fontFamily: "'DM Mono', monospace", fontWeight: 600, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap" }}>
+                {pad(elapsedMin)}:{pad(elapsedSec)}
+              </div>
+              {/* Triangle top */}
+              <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "6px solid #1a1714", marginBottom: 0 }} />
+              {/* Line */}
+              <div style={{ width: 2, height: 24, background: "#1a1714", borderRadius: 1 }} />
             </div>
-            {/* Needle line */}
-            <div style={{
-              width: 2,
-              height: 28,
-              background: "#1a1714",
-              borderRadius: 1,
-            }} />
-            {/* Triangle pointer */}
-            <div style={{
-              width: 0, height: 0,
-              borderLeft: "5px solid transparent",
-              borderRight: "5px solid transparent",
-              borderTop: "6px solid #1a1714",
-            }} />
-          </div>
+          )}
         </div>
 
-        {/* Time axis labels */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 64, paddingTop: 4 }}>
-          {[0, 0.25, 0.5, 0.75, 1].map(pct => {
-            const s = Math.round(pct * trackMax);
-            return (
-              <span key={pct} style={{ fontSize: 10, color: "#ccc8c2", fontFamily: "'DM Mono', monospace" }}>
-                {Math.floor(s / 60)}m
-              </span>
-            );
-          })}
+        {/* Axis labels */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
+          <span style={{ fontSize: 10, color: "#ccc8c2", fontFamily: "'DM Mono', monospace" }}>{fmtMSS(windowStart)}</span>
+          <span style={{ fontSize: 10, color: "#ccc8c2", fontFamily: "'DM Mono', monospace" }}>{fmtMSS((windowStart + windowEnd) / 2)}</span>
+          <span style={{ fontSize: 10, color: "#ccc8c2", fontFamily: "'DM Mono', monospace" }}>{fmtMSS(windowEnd)}</span>
         </div>
       </div>
 
-      {/* Who's winning callout */}
+      {/* Who's winning */}
       <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 18 }}>🎯</span>
         <div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1714" }}>{currentLeader.name} </span>
           <span style={{ fontSize: 13, color: "#8a837a" }}>
-            is closest — guessed {fmtLabel(currentLeader.guessSeconds)}, currently{" "}
+            is closest — guessed {fmtMSS(currentLeader.guessSeconds)},{" "}
             {elapsedSeconds < currentLeader.guessSeconds
               ? `${Math.round(currentLeader.guessSeconds - elapsedSeconds)}s away`
               : `${Math.round(elapsedSeconds - currentLeader.guessSeconds)}s past`}

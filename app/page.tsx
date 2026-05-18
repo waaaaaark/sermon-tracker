@@ -9,12 +9,13 @@ import {
 import HorseRace from "@/components/HorseRace";
 
 interface Sermon { id: string; date: string; durationSeconds: number; }
-interface Guess { name: string; guessSeconds: number; submittedAt: string; }
+interface Guess { name: string; guessSeconds: number; submittedAt: string; childrensSermonBet?: "yes" | "no" | null; }
 interface Standing { name: string; points: number; guesses: number; wins: string[]; }
 interface LiveData { startedAt: number; date: string; }
 interface Resolution {
   date: string; durationSeconds: number;
   winner: string | null; winnerGuessSeconds: number | null;
+  winnerPoints?: number;
   resolvedAt: string;
 }
 
@@ -103,16 +104,20 @@ export default function Home() {
   const [resolution, setResolution] = useState<Resolution | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // sermon add form
   const [showForm, setShowForm] = useState(false);
   const [sDate, setSDate] = useState("");
   const [sMinutes, setSMinutes] = useState(30);
   const [sSeconds, setSSeconds] = useState(0);
+  const [sChildrens, setSChildrens] = useState<"yes" | "no" | null>(null);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
 
+  // guess form
   const [gName, setGName] = useState("");
   const [gMinutes, setGMinutes] = useState(25);
   const [gSeconds, setGSeconds] = useState(0);
+  const [gChildrensBet, setGChildrensBet] = useState<"yes" | "no" | null>(null);
   const [gSubmitting, setGSubmitting] = useState(false);
   const [gErr, setGErr] = useState("");
   const [gSuccess, setGSuccess] = useState("");
@@ -136,8 +141,6 @@ export default function Home() {
       setStandings(Array.isArray(l) ? l : []);
       setLive(lv);
       setResolution(r);
-
-      // If live, also fetch guesses for that sermon date
       if (lv?.date) {
         const lgRes = await fetch(`/api/guesses?date=${lv.date}`);
         const lg = await lgRes.json();
@@ -151,7 +154,6 @@ export default function Home() {
 
   useEffect(() => {
     load();
-    // Poll every 5 seconds for live updates
     pollRef.current = setInterval(load, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [load]);
@@ -161,10 +163,10 @@ export default function Home() {
     setSaving(true); setFormErr("");
     const res = await fetch("/api/sermons", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: sDate, minutes: sMinutes, seconds: sSeconds }),
+      body: JSON.stringify({ date: sDate, minutes: sMinutes, seconds: sSeconds, hadChildrensSermon: sChildrens === "yes" ? true : sChildrens === "no" ? false : null }),
     });
     if (res.ok) {
-      setShowForm(false); setSDate(""); setSMinutes(30); setSSeconds(0);
+      setShowForm(false); setSDate(""); setSMinutes(30); setSSeconds(0); setSChildrens(null);
       load();
     } else {
       const d = await res.json(); setFormErr(d.error || "Failed to save.");
@@ -186,11 +188,12 @@ export default function Home() {
     setGSubmitting(true); setGErr(""); setGSuccess("");
     const res = await fetch("/api/guesses", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: nextSunday, name: gName, guessSeconds: gMinutes * 60 + gSeconds }),
+      body: JSON.stringify({ date: nextSunday, name: gName, guessSeconds: gMinutes * 60 + gSeconds, childrensSermonBet: gChildrensBet }),
     });
     const data = await res.json();
     if (res.ok) {
-      setGSuccess(`Got it, ${gName}! Your guess of ${fmtLabel(gMinutes * 60 + gSeconds)} is locked in.`);
+      const betMsg = gChildrensBet ? ` · children's sermon: ${gChildrensBet}` : "";
+      setGSuccess(`Got it, ${gName}! Locked in ${fmtLabel(gMinutes * 60 + gSeconds)}${betMsg}.`);
       load();
     } else {
       setGErr(data.error || "Failed to submit.");
@@ -208,6 +211,17 @@ export default function Home() {
   const medals = ["🥇", "🥈", "🥉"];
 
   void PLAYERS;
+
+  // Children's sermon bet toggle button style
+  function betBtnStyle(active: boolean, activeColor: string): React.CSSProperties {
+    return {
+      background: active ? activeColor : "#f7f5f2",
+      color: active ? "#fff" : "#8a837a",
+      border: `1px solid ${active ? activeColor : "#e2ddd8"}`,
+      borderRadius: 6, padding: "6px 14px", fontSize: 12,
+      fontFamily: "'DM Mono', monospace", cursor: "pointer", fontWeight: active ? 600 : 400,
+    };
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f7f5f2" }}>
@@ -233,7 +247,7 @@ export default function Home() {
       {/* Sermon entry form */}
       {showForm && (
         <div style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `20px ${pad2}` }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-end" }}>
             <Field label="Date">
               <input type="date" value={sDate} onChange={e => setSDate(e.target.value)} style={inputStyle} />
             </Field>
@@ -247,6 +261,13 @@ export default function Home() {
                   onChange={e => setSSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
                   style={{ ...inputStyle, width: 64 }} />
                 <span style={{ color: "#b5b0aa" }}>s</span>
+              </div>
+            </Field>
+            <Field label="Children's sermon?">
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setSChildrens(sChildrens === "yes" ? null : "yes")} style={betBtnStyle(sChildrens === "yes", "#2d6a4f")}>Yes</button>
+                <button onClick={() => setSChildrens(sChildrens === "no" ? null : "no")} style={betBtnStyle(sChildrens === "no", "#c0392b")}>No</button>
+                {sChildrens && <button onClick={() => setSChildrens(null)} style={{ ...betBtnStyle(false, ""), fontSize: 11 }}>clear</button>}
               </div>
             </Field>
             <button onClick={handleSaveSermon} disabled={saving}
@@ -270,11 +291,10 @@ export default function Home() {
                 <HorseRace startedAt={live.startedAt} guesses={liveGuesses} />
               </div>
             )}
-
             {live && liveGuesses.length === 0 && (
               <div style={{ ...card, padding: "24px", marginBottom: 24, borderColor: "#c0392b" }}>
                 <div style={{ ...sectionLabel, color: "#c0392b" }}>🔴 Sermon in progress</div>
-                <p style={{ color: "#8a837a", fontSize: 13 }}>Timer is running — no guesses were submitted for today so there&apos;s no race to show.</p>
+                <p style={{ color: "#8a837a", fontSize: 13 }}>Timer is running — no guesses submitted for today.</p>
               </div>
             )}
 
@@ -292,7 +312,9 @@ export default function Home() {
                   <div style={{ flex: 1, minWidth: 160 }}>
                     {resolution.winner ? (
                       <>
-                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Winner 🏆</div>
+                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                          Winner 🏆{resolution.winnerPoints === 2 ? " · 2 pts (bold call!)" : ""}
+                        </div>
                         <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
                           {resolution.winner}
                         </div>
@@ -308,10 +330,32 @@ export default function Home() {
               </div>
             )}
 
-            {/* ── Guess section ─────────────────────────────────── */}
+            {/* ── THIS WEEK'S GUESSES (when not live) ───────────── */}
+            {!live && guesses.length > 0 && (
+              <div style={{ ...card, padding: "24px", marginBottom: 24 }}>
+                <div style={sectionLabel}>This week&apos;s guesses · {fmtDate(nextSunday)}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {guesses.map(g => (
+                    <div key={g.name} style={{ background: "#f7f5f2", border: "1px solid #e2ddd8", borderRadius: 8, padding: "10px 14px", minWidth: 100 }}>
+                      <div style={{ fontSize: 11, color: "#b5b0aa", marginBottom: 4 }}>{g.name}</div>
+                      <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: "#1a1714" }}>{fmtLabel(g.guessSeconds)}</div>
+                      {g.childrensSermonBet && (
+                        <div style={{ fontSize: 10, marginTop: 4, color: g.childrensSermonBet === "yes" ? "#2d6a4f" : "#c0392b" }}>
+                          children&apos;s: {g.childrensSermonBet}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── GUESS SUBMISSION ───────────────────────────────── */}
             {!live && (
               <div style={{ ...card, padding: "24px", marginBottom: 24 }}>
-                <div style={sectionLabel}>This Sunday · {fmtDate(nextSunday)}</div>
+                <div style={sectionLabel}>
+                  {guesses.length > 0 ? "Update your guess" : "Make your guess"} · {fmtDate(nextSunday)}
+                </div>
                 {!open ? (
                   <p style={{ color: "#8a837a", fontSize: 13 }}>Guesses are closed — it&apos;s past 10:35 AM CT. Check back next week!</p>
                 ) : gSuccess ? (
@@ -325,18 +369,8 @@ export default function Home() {
                 ) : (
                   <>
                     <p style={{ color: "#8a837a", fontSize: 13, marginBottom: 20 }}>
-                      How long will the sermon be? Closest guess wins — over or under. Guesses close at 10:35 AM CT.
+                      Closest guess wins. Guesses outside ±2min of the weekly average earn 2 pts. Closes 10:35 AM CT.
                     </p>
-                    {guesses.length > 0 && (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-                        {guesses.map(g => (
-                          <div key={g.name} style={{ background: "#f0ede9", borderRadius: 6, padding: "6px 12px", fontSize: 12 }}>
-                            <span style={{ color: "#8a837a" }}>{g.name}</span>
-                            <span style={{ color: "#1a1714", marginLeft: 8, fontWeight: 600 }}>{fmtLabel(g.guessSeconds)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       <Field label="Who are you?">
                         <select value={gName} onChange={e => setGName(e.target.value)} style={{ ...inputStyle, width: isMobile ? "100%" : 160 }}>
@@ -344,11 +378,10 @@ export default function Home() {
                           {NAMES.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </Field>
-                      <Field label="Your guess">
+                      <Field label="Sermon length guess">
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 160px" }}>
-                            <input
-                            type="range" min={5} max={45} value={gMinutes}
+                            <input type="range" min={5} max={45} value={gMinutes}
                               onChange={e => setGMinutes(parseInt(e.target.value))}
                               style={{ width: "100%", accentColor: "#2d6a4f" }} />
                             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#b5b0aa" }}>
@@ -366,6 +399,13 @@ export default function Home() {
                           </div>
                         </div>
                       </Field>
+                      <Field label="Children's sermon? (optional · +1 if right, −1 if wrong)">
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => setGChildrensBet(gChildrensBet === "yes" ? null : "yes")} style={betBtnStyle(gChildrensBet === "yes", "#2d6a4f")}>Yes</button>
+                          <button onClick={() => setGChildrensBet(gChildrensBet === "no" ? null : "no")} style={betBtnStyle(gChildrensBet === "no", "#c0392b")}>No</button>
+                          <span style={{ fontSize: 11, color: "#ccc8c2", alignSelf: "center" }}>or skip to abstain</span>
+                        </div>
+                      </Field>
                       <button onClick={handleGuess} disabled={gSubmitting}
                         style={{ background: "#2d6a4f", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 12, fontWeight: 600, opacity: gSubmitting ? 0.6 : 1, width: isMobile ? "100%" : "auto", alignSelf: "flex-start" }}>
                         {gSubmitting ? "Locking in…" : "Lock In Guess"}
@@ -381,7 +421,7 @@ export default function Home() {
             {sermons.length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 24 }}>
                 <div style={{ ...card, padding: "24px" }}>
-                  <div style={sectionLabel}>Leaderboard · Price is Right Rules</div>
+                  <div style={sectionLabel}>Leaderboard</div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr>
@@ -404,7 +444,7 @@ export default function Home() {
                     </tbody>
                   </table>
                   <p style={{ color: "#ccc8c2", fontSize: 10, marginTop: 12, fontStyle: "italic" }}>
-                    Closest guess wins — over or under. Ties both get a point.
+                    Closest wins. Bold calls (±2m outside avg) earn 2pts. Children&apos;s sermon: ±1pt.
                   </p>
                 </div>
 

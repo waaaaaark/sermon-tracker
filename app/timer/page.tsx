@@ -41,6 +41,7 @@ export default function TimerPage() {
   const [saveDate, setSaveDate] = useState(getThisSunday());
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  const [childrensSermon, setChildrensSermon] = useState<"yes" | "no" | null>(null);
 
   const startRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -114,11 +115,12 @@ export default function TimerPage() {
     const res = await fetch("/api/sermons", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: saveDate, minutes, seconds }),
+      body: JSON.stringify({ date: saveDate, minutes, seconds, hadChildrensSermon: childrensSermon === "yes" ? true : childrensSermon === "no" ? false : null }),
     });
     if (res.ok) {
       localStorage.removeItem(STORAGE_KEY);
       await fetch("/api/live", { method: "DELETE" });
+      setChildrensSermon(null);
       setPhase("saved");
     } else {
       const d = await res.json();
@@ -204,6 +206,18 @@ export default function TimerPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ color: "#8a837a", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>Duration</label>
                   <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 32, fontWeight: 700, color: "#2d6a4f" }}>{pad(minutes)}:{pad(seconds)}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ color: "#8a837a", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase" }}>Children's Sermon?</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["yes", "no"] as const).map(v => (
+                      <button key={v} onClick={() => setChildrensSermon(childrensSermon === v ? null : v)}
+                        style={{ background: childrensSermon === v ? (v === "yes" ? "#2d6a4f" : "#c0392b") : "#f7f5f2", color: childrensSermon === v ? "#fff" : "#8a837a", border: `1px solid ${childrensSermon === v ? (v === "yes" ? "#2d6a4f" : "#c0392b") : "#e2ddd8"}`, borderRadius: 6, padding: "6px 16px", fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                      </button>
+                    ))}
+                    <span style={{ fontSize: 11, color: "#ccc8c2", alignSelf: "center" }}>optional</span>
+                  </div>
                 </div>
                 {saveErr && <p style={{ color: "#c0392b", fontSize: 12 }}>{saveErr}</p>}
                 <button onClick={handleSave} disabled={saving}

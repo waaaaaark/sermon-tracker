@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGuesses, saveGuesses, Guess } from "@/lib/store";
 
-// GET /api/guesses?date=YYYY-MM-DD
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
   if (!date) return NextResponse.json({ error: "Missing date" }, { status: 400 });
@@ -9,9 +8,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(guesses);
 }
 
-// POST /api/guesses  { date, name, guessSeconds }
 export async function POST(req: NextRequest) {
-  const { date, name, guessSeconds } = await req.json();
+  const { date, name, guessSeconds, childrensSermonBet } = await req.json();
   if (!date || !name || guessSeconds == null) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
@@ -21,21 +19,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid name" }, { status: 400 });
   }
 
-  // Cutoff: 10:30 AM Central on the Sunday in question
-  // Central is UTC-6 (CST) or UTC-5 (CDT) — use Intl to get current CT offset
   const now = new Date();
   const nowCT = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
   const [y, m, d] = date.split("-").map(Number);
-  const sundayCT = new Date(y, m - 1, d, 10, 35, 0); // 10:30 AM on that Sunday
+  const sundayCT = new Date(y, m - 1, d, 10, 35, 0);
   if (nowCT >= sundayCT) {
-    return NextResponse.json({ error: "Guesses are closed for this Sunday (cutoff is 10:30 AM CT)." }, { status: 400 });
+    return NextResponse.json({ error: "Guesses are closed for this Sunday (cutoff is 10:35 AM CT)." }, { status: 400 });
   }
 
   const guesses = await getGuesses(date);
-
-  // One guess per name per date — replace if exists
   const idx = guesses.findIndex(g => g.name === name);
-  const guess: Guess = { name, guessSeconds, submittedAt: now.toISOString() };
+  const bet = childrensSermonBet === "yes" ? "yes" : childrensSermonBet === "no" ? "no" : null;
+  const guess: Guess = { name, guessSeconds, submittedAt: now.toISOString(), childrensSermonBet: bet };
   if (idx >= 0) guesses[idx] = guess;
   else guesses.push(guess);
 
