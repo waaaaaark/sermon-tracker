@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine
@@ -227,29 +228,23 @@ export default function Home() {
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f7f5f2" }}>
 
       {/* Header */}
-      <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `0 ${pad2}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ borderBottom: "1px solid rgba(0,0,0,0.18)", background: "#2d6a4f", padding: `0 ${pad2}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-            <rect x="9" y="0" width="2" height="6" rx="0.5" fill="#2d6a4f"/>
-            <rect x="6.5" y="1.5" width="7" height="2.5" rx="0.5" fill="#2d6a4f"/>
-            <path d="M2 11 L10 7 L18 11 Z" fill="#2d6a4f"/>
-            <rect x="2" y="11" width="16" height="9" rx="1" fill="#2d6a4f"/>
-            <rect x="8" y="15" width="4" height="5" rx="2" fill="#e8f4ef"/>
-            <rect x="4" y="13" width="3" height="3" rx="0.5" fill="#a8d5b5" opacity="0.7"/>
-            <rect x="13" y="13" width="3" height="3" rx="0.5" fill="#a8d5b5" opacity="0.7"/>
-          </svg>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
-            <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Pew & Pulpit</span>
-            {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
-          </div>
+          <Image src="/logo.png" alt="Pew & Pulpit" height={44} width={59} style={{ objectFit: "contain" }} />
+          {!isMobile && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffffff" }}>Pew & Pulpit</span>
+              {sermons.length > 0 && <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>{sermons.length} entries</span>}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Link href="/timer" style={{ color: "#8a837a", fontSize: 12, textDecoration: "none", padding: "6px 12px", border: "1px solid #e2ddd8", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}>
+          <Link href="/timer" style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}>
             ⏱{!isMobile && " Timer"}
           </Link>
           <button
             onClick={() => { setShowForm(!showForm); setFormErr(""); }}
-            style={{ background: showForm ? "#f0ede9" : "#2d6a4f", color: showForm ? "#1a1714" : "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 500, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>
+            style={{ background: showForm ? "rgba(255,255,255,0.15)" : "#ffffff", color: showForm ? "#ffffff" : "#2d6a4f", border: showForm ? "1px solid rgba(255,255,255,0.3)" : "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", whiteSpace: "nowrap" }}>
             {showForm ? "Cancel" : "+ Add Sermon"}
           </button>
         </div>
