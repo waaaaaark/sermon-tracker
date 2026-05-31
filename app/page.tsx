@@ -228,9 +228,20 @@ export default function Home() {
 
       {/* Header */}
       <header style={{ borderBottom: "1px solid #e2ddd8", background: "#fff", padding: `0 ${pad2}`, height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
-          <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Sermon Log</span>
-          {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+            <rect x="9" y="0" width="2" height="6" rx="0.5" fill="#2d6a4f"/>
+            <rect x="6.5" y="1.5" width="7" height="2.5" rx="0.5" fill="#2d6a4f"/>
+            <path d="M2 11 L10 7 L18 11 Z" fill="#2d6a4f"/>
+            <rect x="2" y="11" width="16" height="9" rx="1" fill="#2d6a4f"/>
+            <rect x="8" y="15" width="4" height="5" rx="2" fill="#e8f4ef"/>
+            <rect x="4" y="13" width="3" height="3" rx="0.5" fill="#a8d5b5" opacity="0.7"/>
+            <rect x="13" y="13" width="3" height="3" rx="0.5" fill="#a8d5b5" opacity="0.7"/>
+          </svg>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
+            <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#1a1714" }}>Pew & Pulpit</span>
+            {sermons.length > 0 && <span style={{ color: "#b5b0aa", fontSize: 12 }}>{sermons.length} entries</span>}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Link href="/timer" style={{ color: "#8a837a", fontSize: 12, textDecoration: "none", padding: "6px 12px", border: "1px solid #e2ddd8", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}>
@@ -494,21 +505,23 @@ export default function Home() {
                     <span key={i} style={{ color: "#b5b0aa", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" }}>{h}</span>
                   ))}
                 </div>
-                {[...sorted].reverse().map((s, i) => (
-                  <div key={s.id}
-                    style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", padding: "12px 20px", borderBottom: i < sorted.length - 1 ? "1px solid #f0ede9" : "none", alignItems: "center", minWidth: 280 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f7f5f2")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                  >
-                    <span style={{ color: "#8a837a", fontSize: 13 }}>{fmtDate(s.date)}</span>
-                    <span style={{ color: "#2d6a4f", fontSize: 13, fontWeight: 500 }}>{fmtLabel(s.durationSeconds)}</span>
-                    <button onClick={() => handleDelete(s.id, s.date)}
-                      style={{ background: "none", border: "none", color: "#ccc8c2", fontSize: 18, padding: 0, lineHeight: 1, cursor: "pointer" }}
-                      onMouseEnter={e => (e.currentTarget.style.color = "#c0392b")}
-                      onMouseLeave={e => (e.currentTarget.style.color = "#ccc8c2")}
-                      title="Delete">×</button>
-                  </div>
-                ))}
+                <div style={{ maxHeight: 340, overflowY: "auto" }}>
+                  {[...sorted].reverse().map((s, i) => (
+                    <div key={s.id}
+                      style={{ display: "grid", gridTemplateColumns: "1fr 1fr 32px", padding: "12px 20px", borderBottom: i < sorted.length - 1 ? "1px solid #f0ede9" : "none", alignItems: "center", minWidth: 280 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#f7f5f2")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span style={{ color: "#8a837a", fontSize: 13 }}>{fmtDate(s.date)}</span>
+                      <span style={{ color: "#2d6a4f", fontSize: 13, fontWeight: 500 }}>{fmtLabel(s.durationSeconds)}</span>
+                      <button onClick={() => handleDelete(s.id, s.date)}
+                        style={{ background: "none", border: "none", color: "#ccc8c2", fontSize: 18, padding: 0, lineHeight: 1, cursor: "pointer" }}
+                        onMouseEnter={e => (e.currentTarget.style.color = "#c0392b")}
+                        onMouseLeave={e => (e.currentTarget.style.color = "#ccc8c2")}
+                        title="Delete">×</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

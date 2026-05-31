@@ -108,6 +108,17 @@ export async function saveResolution(r: Resolution): Promise<void> {
   await kset("resolution", r, 60 * 60 * 25);
 }
 
+// ── Point overrides ───────────────────────────────────────────────────────────
+
+export async function getPointOverrides(): Promise<Record<string, number>> {
+  const val = await kget<Record<string, number>>("pointOverrides");
+  return val ?? {};
+}
+
+export async function setPointOverrides(overrides: Record<string, number>): Promise<void> {
+  await kset("pointOverrides", overrides);
+}
+
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 
 export async function getLeaderboard(): Promise<Standing[]> {
@@ -165,9 +176,12 @@ export async function getLeaderboard(): Promise<Standing[]> {
     sermonCount++;
   }
 
+  const overrides = await getPointOverrides();
+
   return PLAYERS.map(n => {
     const s = standings.get(n)!;
-    return { ...s, points: s.points + s.childrensSermonPoints };
+    const override = overrides[n] ?? 0;
+    return { ...s, points: s.points + s.childrensSermonPoints + override };
   }).sort((a, b) => b.points - a.points || b.guesses - a.guesses);
 }
 
