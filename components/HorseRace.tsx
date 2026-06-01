@@ -54,12 +54,25 @@ export default function SermonRace({ startedAt, guesses }: Props) {
 
   const sorted = [...guesses].sort((a, b) => a.guessSeconds - b.guessSeconds);
 
-  const BUFFER = 300; // 5-minute padding on each side
   const minGuess = Math.min(...sorted.map(g => g.guessSeconds));
   const maxGuess = Math.max(...sorted.map(g => g.guessSeconds));
-  // Window always includes both the needle and all pins
-  const windowStart = Math.max(0, Math.min(minGuess, elapsedSeconds) - BUFFER);
-  const windowEnd = Math.max(maxGuess, elapsedSeconds) + BUFFER;
+  const guessSpan = maxGuess - minGuess;
+  const guessCenter = (minGuess + maxGuess) / 2;
+
+  // Zoom to the guess cluster so icons are always spread out.
+  // Window = guess span + padding on each side, minimum 4 minutes total.
+  const PADDING = 90; // 1.5 min breathing room on each side of the cluster
+  const MIN_WINDOW = 240; // never zoom in tighter than 4 minutes
+  const baseWindow = Math.max(guessSpan + 2 * PADDING, MIN_WINDOW);
+  let wStart = guessCenter - baseWindow / 2;
+  let wEnd = guessCenter + baseWindow / 2;
+
+  // Expand to keep needle visible
+  if (elapsedSeconds > wEnd) wEnd = elapsedSeconds + PADDING;
+  if (elapsedSeconds < wStart) wStart = elapsedSeconds - PADDING;
+
+  const windowStart = Math.max(0, wStart);
+  const windowEnd = wEnd;
   const windowSize = windowEnd - windowStart;
 
   function toWindowPct(sec: number): number {
