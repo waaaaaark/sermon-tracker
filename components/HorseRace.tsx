@@ -14,6 +14,13 @@ interface Props {
 
 const COLORS = ["#2d6a4f", "#c0392b", "#8e44ad", "#d4861a", "#2980b9"];
 
+const AVATARS: Record<string, string> = {
+  Matt: "/avatars/matt-32.png",
+  Marty: "/avatars/marty-32.png",
+  Brendan: "/avatars/brendan-32.png",
+  Brandon: "/avatars/brandon-32.png",
+};
+
 function pad(n: number) { return n.toString().padStart(2, "0"); }
 function fmtMSS(s: number) {
   const m = Math.floor(s / 60);
@@ -96,27 +103,54 @@ export default function SermonRace({ startedAt, guesses }: Props) {
             const isPast = elapsedSeconds > g.guessSeconds + 15;
             const color = COLORS[i % COLORS.length];
             const diff = Math.abs(g.guessSeconds - elapsedSeconds);
+            const avatarSrc = AVATARS[g.name];
+            const pinSize = isLeader ? 38 : 32;
+            const labelBottom = isLeader ? 52 : 44;
 
             return (
               <div key={g.name} style={{ position: "absolute", left: `${pct}%`, top: "50%", transform: "translate(-50%, -50%)", zIndex: 3 }}>
-                {/* Stem up */}
-                <div style={{ position: "absolute", left: "50%", bottom: 6, width: 2, height: 28, background: isPast ? "#ccc8c2" : color, transform: "translateX(-50%)", opacity: isPast ? 0.4 : 1 }} />
                 {/* Label above */}
-                <div style={{ position: "absolute", bottom: 36, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
+                <div style={{ position: "absolute", bottom: labelBottom, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
                   <div style={{ fontSize: 11, fontWeight: isLeader ? 700 : 500, color: isPast ? "#ccc8c2" : color, marginBottom: 1 }}>{g.name}</div>
                   <div style={{ fontSize: 10, color: "#b5b0aa" }}>{fmtMSS(g.guessSeconds)}</div>
                   {isLeader && !isPast && (
                     <div style={{ fontSize: 9, color: color, marginTop: 1 }}>±{Math.round(diff)}s</div>
                   )}
                 </div>
-                {/* Pin dot */}
-                <div style={{
-                  width: isLeader ? 16 : 12, height: isLeader ? 16 : 12, borderRadius: "50%",
-                  background: isPast ? "#e2ddd8" : color,
-                  border: `2px solid ${isPast ? "#ccc8c2" : color}`,
-                  boxShadow: isLeader && !isPast ? `0 0 0 4px ${color}25` : "none",
-                  transition: "all 0.2s", position: "relative", zIndex: 4,
-                }} />
+                {/* Avatar or initial fallback */}
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={g.name}
+                    width={pinSize}
+                    height={pinSize}
+                    style={{
+                      borderRadius: "50%",
+                      border: `2px solid ${isPast ? "#ccc8c2" : color}`,
+                      boxShadow: isLeader && !isPast ? `0 0 0 4px ${color}30` : "none",
+                      opacity: isPast ? 0.45 : 1,
+                      display: "block",
+                      position: "relative",
+                      zIndex: 4,
+                      imageRendering: "pixelated",
+                      transition: "all 0.2s",
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: pinSize, height: pinSize, borderRadius: "50%",
+                    background: isPast ? "#e2ddd8" : color,
+                    border: `2px solid ${isPast ? "#ccc8c2" : color}`,
+                    boxShadow: isLeader && !isPast ? `0 0 0 4px ${color}30` : "none",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#fff", fontSize: 14, fontWeight: 700,
+                    position: "relative", zIndex: 4,
+                    opacity: isPast ? 0.45 : 1,
+                    transition: "all 0.2s",
+                  }}>
+                    {g.name[0]}
+                  </div>
+                )}
               </div>
             );
           })}

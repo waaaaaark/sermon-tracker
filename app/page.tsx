@@ -23,6 +23,13 @@ interface Resolution {
 const NAMES = ["Matt", "Marty", "Brendan", "Brandon", "Dave", "Guest"];
 const PLAYERS = ["Matt", "Marty", "Brendan", "Brandon", "Dave"];
 
+const AVATARS: Record<string, string> = {
+  Matt: "/avatars/matt-32.png",
+  Marty: "/avatars/marty-32.png",
+  Brendan: "/avatars/brendan-32.png",
+  Brandon: "/avatars/brandon-32.png",
+};
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -442,7 +449,17 @@ export default function Home() {
                           <td style={{ padding: "10px 8px 10px 0", fontSize: 14, width: 24 }}>
                             {i < 3 && s.points > 0 ? medals[i] : <span style={{ color: "#ccc8c2", fontSize: 12 }}>{i + 1}</span>}
                           </td>
-                          <td style={{ padding: "10px 0", fontSize: 13, color: "#1a1714", fontWeight: s.points > 0 ? 600 : 400 }}>{s.name}</td>
+                          <td style={{ padding: "10px 0" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              {AVATARS[s.name] ? (
+                                <img src={AVATARS[s.name]} alt={s.name} width={24} height={24}
+                                  style={{ borderRadius: "50%", imageRendering: "pixelated", flexShrink: 0 }} />
+                              ) : (
+                                <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#e2ddd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#8a837a", flexShrink: 0 }}>{s.name[0]}</div>
+                              )}
+                              <span style={{ fontSize: 13, color: "#1a1714", fontWeight: s.points > 0 ? 600 : 400 }}>{s.name}</span>
+                            </div>
+                          </td>
                           <td style={{ padding: "10px 0", textAlign: "right", fontSize: 15, fontFamily: "'Syne', sans-serif", fontWeight: 700, color: s.points > 0 ? "#2d6a4f" : "#ccc8c2" }}>{s.points}</td>
                           <td style={{ padding: "10px 0", textAlign: "right", fontSize: 12, color: "#b5b0aa" }}>{s.guesses}</td>
                         </tr>
