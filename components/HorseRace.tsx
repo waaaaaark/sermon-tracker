@@ -21,6 +21,13 @@ const AVATARS: Record<string, string> = {
   Brandon: "/avatars/brandon-32.png",
 };
 
+const AVATARS_48: Record<string, string> = {
+  Matt: "/avatars/matt-48.png",
+  Marty: "/avatars/marty-48.png",
+  Brendan: "/avatars/brendan-48.png",
+  Brandon: "/avatars/brandon-48.png",
+};
+
 function pad(n: number) { return n.toString().padStart(2, "0"); }
 function fmtMSS(s: number) {
   const m = Math.floor(s / 60);
@@ -47,27 +54,25 @@ export default function SermonRace({ startedAt, guesses }: Props) {
 
   const sorted = [...guesses].sort((a, b) => a.guessSeconds - b.guessSeconds);
 
-  // Window: min guess - 5min to max guess + 5min
-  const BUFFER = 300; // 5 minutes
+  const BUFFER = 300; // 5-minute padding on each side
   const minGuess = Math.min(...sorted.map(g => g.guessSeconds));
   const maxGuess = Math.max(...sorted.map(g => g.guessSeconds));
-  const windowStart = Math.max(0, minGuess - BUFFER);
-  const windowEnd = maxGuess + BUFFER;
+  // Window always includes both the needle and all pins
+  const windowStart = Math.max(0, Math.min(minGuess, elapsedSeconds) - BUFFER);
+  const windowEnd = Math.max(maxGuess, elapsedSeconds) + BUFFER;
   const windowSize = windowEnd - windowStart;
 
-  // Convert a time (seconds) to a % position within the window
-  // Returns null if outside the window (needle will be off-screen)
   function toWindowPct(sec: number): number {
     return ((sec - windowStart) / windowSize) * 100;
   }
 
   const needlePct = toWindowPct(elapsedSeconds);
-  const needleVisible = needlePct >= -5 && needlePct <= 105; // small grace margin
 
   // Who's currently winning
   const currentLeader = sorted.reduce((best, g) => {
     return Math.abs(g.guessSeconds - elapsedSeconds) < Math.abs(best.guessSeconds - elapsedSeconds) ? g : best;
   });
+  const leaderColor = COLORS[sorted.findIndex(g => g.name === currentLeader.name) % COLORS.length];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -83,13 +88,6 @@ export default function SermonRace({ startedAt, guesses }: Props) {
           <span style={{ fontSize: 11, color: "#8a837a", letterSpacing: "0.06em", textTransform: "uppercase" }}>Live</span>
         </span>
       </div>
-
-      {/* Pre-window status */}
-      {!needleVisible && elapsedSeconds < windowStart && (
-        <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "10px 16px", fontSize: 12, color: "#8a837a" }}>
-          ⏳ Earliest guess is {fmtMSS(minGuess)} — needle enters view in ~{Math.ceil((windowStart - elapsedSeconds) / 60)}m
-        </div>
-      )}
 
       {/* Timeline */}
       <div style={{ position: "relative", overflow: "hidden", padding: "40px 0 56px" }}>
@@ -155,9 +153,8 @@ export default function SermonRace({ startedAt, guesses }: Props) {
             );
           })}
 
-          {/* Elapsed needle — clipped to track, slides in from left */}
-          {needleVisible && (
-            <div style={{
+          {/* Elapsed needle */}
+          <div style={{
               position: "absolute",
               left: `${Math.max(0, Math.min(100, needlePct))}%`,
               top: "50%",
@@ -175,7 +172,6 @@ export default function SermonRace({ startedAt, guesses }: Props) {
               {/* Line */}
               <div style={{ width: 2, height: 24, background: "#1a1714", borderRadius: 1 }} />
             </div>
-          )}
         </div>
 
         {/* Axis labels */}
@@ -187,8 +183,15 @@ export default function SermonRace({ startedAt, guesses }: Props) {
       </div>
 
       {/* Who's winning */}
-      <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 18 }}>🎯</span>
+      <div style={{ background: "#f7f5f2", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+        {AVATARS_48[currentLeader.name] ? (
+          <img src={AVATARS_48[currentLeader.name]} alt={currentLeader.name} width={48} height={48}
+            style={{ borderRadius: "50%", imageRendering: "pixelated", flexShrink: 0, border: `2px solid ${leaderColor}` }} />
+        ) : (
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: leaderColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+            {currentLeader.name[0]}
+          </div>
+        )}
         <div>
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1714" }}>{currentLeader.name} </span>
           <span style={{ fontSize: 13, color: "#8a837a" }}>

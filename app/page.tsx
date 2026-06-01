@@ -30,6 +30,13 @@ const AVATARS: Record<string, string> = {
   Brandon: "/avatars/brandon-32.png",
 };
 
+const AVATARS_48: Record<string, string> = {
+  Matt: "/avatars/matt-48.png",
+  Marty: "/avatars/marty-48.png",
+  Brendan: "/avatars/brendan-48.png",
+  Brandon: "/avatars/brandon-48.png",
+};
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -324,17 +331,27 @@ export default function Home() {
                   </div>
                   <div style={{ flex: 1, minWidth: 160 }}>
                     {resolution.winner ? (
-                      <>
-                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-                          Winner 🏆{resolution.winnerPoints === 2 ? " · 2 pts (bold call!)" : ""}
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        {AVATARS_48[resolution.winner] ? (
+                          <img src={AVATARS_48[resolution.winner]} alt={resolution.winner} width={48} height={48}
+                            style={{ borderRadius: "50%", imageRendering: "pixelated", flexShrink: 0, border: "2px solid #a8d5b5" }} />
+                        ) : (
+                          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                            {resolution.winner[0]}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                            Winner 🏆{resolution.winnerPoints === 2 ? " · 2 pts (bold call!)" : ""}
+                          </div>
+                          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
+                            {resolution.winner}
+                          </div>
+                          <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
+                            guessed {fmtLabel(resolution.winnerGuessSeconds!)} — off by {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s
+                          </div>
                         </div>
-                        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
-                          {resolution.winner}
-                        </div>
-                        <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
-                          guessed {fmtLabel(resolution.winnerGuessSeconds!)} — off by {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s
-                        </div>
-                      </>
+                      </div>
                     ) : (
                       <div style={{ color: "#8a837a", fontSize: 13 }}>No guesses were submitted for this Sunday.</div>
                     )}
