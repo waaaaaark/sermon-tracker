@@ -11,14 +11,26 @@ import HorseRace from "@/components/HorseRace";
 
 interface Sermon { id: string; date: string; durationSeconds: number; }
 interface Guess { name: string; guessSeconds: number; submittedAt: string; childrensSermonBet?: "yes" | "no" | null; }
-interface Standing { name: string; points: number; guesses: number; wins: string[]; }
+interface Standing { name: string; points: number; guesses: number; wins: string[]; hotStreak: number; coldStreak: number; achievements: string[]; }
 interface LiveData { startedAt: number; date: string; }
 interface Resolution {
   date: string; durationSeconds: number;
   winner: string | null; winnerGuessSeconds: number | null;
   winnerPoints?: number;
   resolvedAt: string;
+  runnerUp?: string | null; runnerUpGuessSeconds?: number | null;
+  boldestCall?: { name: string; guessSeconds: number } | null;
+  childrensWinners?: string[];
+  allGuesses?: { name: string; guessSeconds: number; diff: number }[];
 }
+
+const ACHIEVEMENT_META: Record<string, { icon: string; label: string }> = {
+  crystal_ball: { icon: "🔮", label: "Crystal Ball — won within 10s" },
+  longshot:     { icon: "🎰", label: "Longshot — won a bold 2pt call" },
+  faithful:     { icon: "⛪", label: "Faithful — guessed 4 weeks in a row" },
+  prophet:      { icon: "📯", label: "Prophet — won 3 weeks in a row" },
+  sharpshooter: { icon: "🎯", label: "Sharpshooter — avg margin under 60s" },
+};
 
 const NAMES = ["Matt", "Marty", "Brendan", "Brandon", "Dave", "Guest"];
 const PLAYERS = ["Matt", "Marty", "Brendan", "Brandon", "Dave"];
@@ -318,45 +330,89 @@ export default function Home() {
               </div>
             )}
 
-            {/* ── RESULTS CARD ──────────────────────────────────── */}
+            {/* ── RECAP CARD ────────────────────────────────────── */}
             {!live && resolution && (
               <div style={{ ...card, padding: "24px", marginBottom: 24, background: "#f0faf4", borderColor: "#a8d5b5" }}>
-                <div style={{ ...sectionLabel, color: "#2d6a4f" }}>Last Sunday&apos;s result · {fmtDate(resolution.date)}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center" }}>
+                <div style={{ ...sectionLabel, color: "#2d6a4f" }}>Last Sunday&apos;s recap · {fmtDate(resolution.date)}</div>
+
+                {/* Top row: duration + winner */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", marginBottom: resolution.allGuesses?.length ? 20 : 0 }}>
                   <div>
                     <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Actual duration</div>
                     <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 32, fontWeight: 800, color: "#1a1714", lineHeight: 1 }}>
                       {fmtLabel(resolution.durationSeconds)}
                     </div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 160 }}>
-                    {resolution.winner ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        {AVATARS_48[resolution.winner] ? (
-                          <img src={AVATARS_48[resolution.winner]} alt={resolution.winner} width={48} height={48}
-                            style={{ borderRadius: "50%", imageRendering: "pixelated", flexShrink: 0, border: "2px solid #a8d5b5" }} />
-                        ) : (
-                          <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
-                            {resolution.winner[0]}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-                            Winner 🏆{resolution.winnerPoints === 2 ? " · 2 pts (bold call!)" : ""}
-                          </div>
-                          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
-                            {resolution.winner}
-                          </div>
-                          <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
-                            guessed {fmtLabel(resolution.winnerGuessSeconds!)} — off by {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s
-                          </div>
+                  {resolution.winner ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 160 }}>
+                      {AVATARS_48[resolution.winner] ? (
+                        <img src={AVATARS_48[resolution.winner]} alt={resolution.winner} width={48} height={48}
+                          style={{ borderRadius: "50%", imageRendering: "pixelated", flexShrink: 0, border: "2px solid #a8d5b5" }} />
+                      ) : (
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#2d6a4f", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                          {resolution.winner[0]}
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ color: "#8a837a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                          Winner 🏆{resolution.winnerPoints === 2 ? " · 2 pts (bold call!)" : ""}
+                        </div>
+                        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: "#2d6a4f" }}>
+                          {resolution.winner}
+                        </div>
+                        <div style={{ color: "#8a837a", fontSize: 12, marginTop: 2 }}>
+                          guessed {fmtLabel(resolution.winnerGuessSeconds!)} — off by {Math.abs(resolution.durationSeconds - resolution.winnerGuessSeconds!)}s
                         </div>
                       </div>
-                    ) : (
-                      <div style={{ color: "#8a837a", fontSize: 13 }}>No guesses were submitted for this Sunday.</div>
+                    </div>
+                  ) : (
+                    <div style={{ color: "#8a837a", fontSize: 13 }}>No guesses were submitted for this Sunday.</div>
+                  )}
+                </div>
+
+                {/* All guesses grid */}
+                {resolution.allGuesses && resolution.allGuesses.length > 0 && (
+                  <div style={{ borderTop: "1px solid #c8e6d0", paddingTop: 16, marginBottom: 16 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {resolution.allGuesses.map((g, idx) => {
+                        const isWinner = idx === 0;
+                        return (
+                          <div key={g.name} style={{ background: isWinner ? "#2d6a4f" : "#fff", border: `1px solid ${isWinner ? "#2d6a4f" : "#d4ead9"}`, borderRadius: 8, padding: "10px 14px", minWidth: 90, textAlign: "center" }}>
+                            <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
+                              {AVATARS[g.name] ? (
+                                <img src={AVATARS[g.name]} alt={g.name} width={24} height={24} style={{ borderRadius: "50%", imageRendering: "pixelated" }} />
+                              ) : (
+                                <div style={{ width: 24, height: 24, borderRadius: "50%", background: isWinner ? "rgba(255,255,255,0.3)" : "#e2ddd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: isWinner ? "#fff" : "#8a837a" }}>{g.name[0]}</div>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: isWinner ? "rgba(255,255,255,0.8)" : "#b5b0aa", marginBottom: 2 }}>{g.name}</div>
+                            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, color: isWinner ? "#fff" : "#1a1714" }}>{fmtLabel(g.guessSeconds)}</div>
+                            <div style={{ fontSize: 10, color: isWinner ? "rgba(255,255,255,0.7)" : "#b5b0aa", marginTop: 2 }}>±{g.diff}s</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Secondary callouts: boldest call + children's */}
+                {((resolution.boldestCall && resolution.boldestCall.name !== resolution.winner) || (resolution.childrensWinners && resolution.childrensWinners.length > 0)) && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, borderTop: "1px solid #c8e6d0", paddingTop: 14 }}>
+                    {resolution.boldestCall && resolution.boldestCall.name !== resolution.winner && (
+                      <div style={{ background: "#fff", border: "1px solid #d4ead9", borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ color: "#b5b0aa", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Boldest call 🎰</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1714" }}>{resolution.boldestCall.name}</div>
+                        <div style={{ fontSize: 12, color: "#8a837a" }}>{fmtLabel(resolution.boldestCall.guessSeconds)}</div>
+                      </div>
+                    )}
+                    {resolution.childrensWinners && resolution.childrensWinners.length > 0 && (
+                      <div style={{ background: "#fff", border: "1px solid #d4ead9", borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ color: "#b5b0aa", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Children&apos;s sermon ✓</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1714" }}>{resolution.childrensWinners.join(", ")}</div>
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -474,7 +530,22 @@ export default function Home() {
                               ) : (
                                 <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#e2ddd8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#8a837a", flexShrink: 0 }}>{s.name[0]}</div>
                               )}
-                              <span style={{ fontSize: 13, color: "#1a1714", fontWeight: s.points > 0 ? 600 : 400 }}>{s.name}</span>
+                              <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                  <span style={{ fontSize: 13, color: "#1a1714", fontWeight: s.points > 0 ? 600 : 400 }}>{s.name}</span>
+                                  {s.hotStreak >= 2 && <span style={{ fontSize: 11 }} title={`${s.hotStreak}-week win streak`}>🔥{s.hotStreak}</span>}
+                                  {s.coldStreak >= 2 && <span style={{ fontSize: 11 }} title={`${s.coldStreak} weeks without a win`}>🧊{s.coldStreak}</span>}
+                                </div>
+                                {s.achievements?.length > 0 && (
+                                  <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
+                                    {s.achievements.map(a => (
+                                      <span key={a} title={ACHIEVEMENT_META[a]?.label} style={{ fontSize: 12, lineHeight: 1, cursor: "default" }}>
+                                        {ACHIEVEMENT_META[a]?.icon}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td style={{ padding: "10px 0", textAlign: "right", fontSize: 15, fontFamily: "'Syne', sans-serif", fontWeight: 700, color: s.points > 0 ? "#2d6a4f" : "#ccc8c2" }}>{s.points}</td>

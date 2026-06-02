@@ -26,6 +26,11 @@ export interface Resolution {
   winnerGuessSeconds: number | null;
   winnerPoints: number; // 1 or 2
   resolvedAt: string;
+  runnerUp?: string | null;
+  runnerUpGuessSeconds?: number | null;
+  boldestCall?: { name: string; guessSeconds: number } | null;
+  childrensWinners?: string[];
+  allGuesses?: { name: string; guessSeconds: number; diff: number }[];
 }
 
 export interface Standing {
@@ -34,6 +39,9 @@ export interface Standing {
   guesses: number;
   wins: string[];
   childrensSermonPoints: number;
+  hotStreak: number;
+  coldStreak: number;
+  achievements: string[];
 }
 
 const mem: Record<string, unknown> = {};
@@ -124,42 +132,54 @@ export async function setPointOverrides(overrides: Record<string, number>): Prom
 export async function getLeaderboard(): Promise<Standing[]> {
   const sermons = await getSermons();
   const standings = new Map<string, Standing>(
-    PLAYERS.map(n => [n, { name: n, points: 0, guesses: 0, wins: [], childrensSermonPoints: 0 }])
+    PLAYERS.map(n => [n, { name: n, points: 0, guesses: 0, wins: [], childrensSermonPoints: 0, hotStreak: 0, coldStreak: 0, achievements: [] }])
   );
 
-  // Running average used for weighting — computed progressively
+  // Per-player history and margin tracking for streaks + achievements
+  const playerHistory = new Map<string, { guessed: boolean; won: boolean }[]>(
+    PLAYERS.map(n => [n, []])
+  );
+  const playerMargins = new Map<string, number[]>(PLAYERS.map(n => [n, []]));
+  const achievements = new Map<string, Set<string>>(PLAYERS.map(n => [n, new Set()]));
+
   let totalSeconds = 0;
   let sermonCount = 0;
+  const THRESHOLD = 120;
 
   for (const sermon of sermons) {
     const guesses = await getGuesses(sermon.date);
     const playerGuesses = guesses.filter(g => PLAYERS.includes(g.name));
-    for (const g of playerGuesses) standings.get(g.name)!.guesses++;
+    for (const g of playerGuesses) {
+      standings.get(g.name)!.guesses++;
+      playerMargins.get(g.name)!.push(Math.abs(g.guessSeconds - sermon.durationSeconds));
+    }
 
-    // ── Sermon length scoring ──────────────────────────────────────────────
+    const winnerNames = new Set<string>();
+
     if (playerGuesses.length > 0) {
       const minDiff = Math.min(...playerGuesses.map(g => Math.abs(g.guessSeconds - sermon.durationSeconds)));
       const winners = playerGuesses.filter(g => Math.abs(g.guessSeconds - sermon.durationSeconds) === minDiff);
-
-      // Weighted: if running avg exists and winner is >2min outside it, award 2 pts
       const runningAvg = sermonCount > 0 ? totalSeconds / sermonCount : null;
-      const THRESHOLD = 120; // 2 minutes in seconds
 
       for (const w of winners) {
         const s = standings.get(w.name)!;
         let pts = 1;
         if (runningAvg !== null && Math.abs(w.guessSeconds - runningAvg) > THRESHOLD) {
           pts = 2;
+          achievements.get(w.name)!.add("longshot");
+        }
+        if (Math.abs(w.guessSeconds - sermon.durationSeconds) <= 10) {
+          achievements.get(w.name)!.add("crystal_ball");
         }
         s.points += pts;
         s.wins.push(sermon.date);
+        winnerNames.add(w.name);
       }
     }
 
-    // ── Children's sermon scoring ──────────────────────────────────────────
     if (sermon.hadChildrensSermon !== null && sermon.hadChildrensSermon !== undefined) {
       for (const g of playerGuesses) {
-        if (!g.childrensSermonBet) continue; // abstain
+        if (!g.childrensSermonBet) continue;
         const s = standings.get(g.name)!;
         if (
           (g.childrensSermonBet === "yes" && sermon.hadChildrensSermon) ||
@@ -172,8 +192,56 @@ export async function getLeaderboard(): Promise<Standing[]> {
       }
     }
 
+    for (const p of PLAYERS) {
+      playerHistory.get(p)!.push({
+        guessed: playerGuesses.some(g => g.name === p),
+        won: winnerNames.has(p),
+      });
+    }
+
     totalSeconds += sermon.durationSeconds;
     sermonCount++;
+  }
+
+  // Compute streaks and remaining achievements per player
+  for (const p of PLAYERS) {
+    const history = playerHistory.get(p)!;
+    const s = standings.get(p)!;
+    const ach = achievements.get(p)!;
+
+    // Streaks: walk backwards until streak type breaks or no-guess week
+    let hotStreak = 0, coldStreak = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const h = history[i];
+      if (!h.guessed) break;
+      if (h.won) {
+        if (coldStreak > 0) break;
+        hotStreak++;
+      } else {
+        if (hotStreak > 0) break;
+        coldStreak++;
+      }
+    }
+    s.hotStreak = hotStreak;
+    s.coldStreak = coldStreak;
+
+    // Faithful: 4+ consecutive weeks with a guess
+    let maxConsec = 0, cur = 0;
+    for (const h of history) { if (h.guessed) { cur++; maxConsec = Math.max(maxConsec, cur); } else cur = 0; }
+    if (maxConsec >= 4) ach.add("faithful");
+
+    // Prophet: 3+ consecutive wins
+    let maxWinStreak = 0, curWin = 0;
+    for (const h of history) { if (h.won) { curWin++; maxWinStreak = Math.max(maxWinStreak, curWin); } else curWin = 0; }
+    if (maxWinStreak >= 3) ach.add("prophet");
+
+    // Sharpshooter: 5+ guesses, avg margin ≤ 60s
+    const margins = playerMargins.get(p)!;
+    if (margins.length >= 5 && margins.reduce((a, b) => a + b, 0) / margins.length <= 60) {
+      ach.add("sharpshooter");
+    }
+
+    s.achievements = [...ach];
   }
 
   const overrides = await getPointOverrides();
@@ -196,7 +264,6 @@ export async function scoreSermon(
   const guesses = await getGuesses(date);
   const playerGuesses = guesses.filter(g => PLAYERS.includes(g.name));
 
-  // Running average BEFORE this sermon
   const prior = sermons.filter(s => s.date < date);
   const runningAvg = prior.length > 0
     ? prior.reduce((sum, s) => sum + s.durationSeconds, 0) / prior.length
@@ -204,13 +271,18 @@ export async function scoreSermon(
 
   const THRESHOLD = 120;
 
+  // Winner
   let winner: string | null = null;
   let winnerGuessSeconds: number | null = null;
   let winnerPoints = 1;
 
-  if (playerGuesses.length > 0) {
-    const minDiff = Math.min(...playerGuesses.map(g => Math.abs(g.guessSeconds - durationSeconds)));
-    const winners = playerGuesses.filter(g => Math.abs(g.guessSeconds - durationSeconds) === minDiff);
+  const ranked = [...playerGuesses]
+    .map(g => ({ ...g, diff: Math.abs(g.guessSeconds - durationSeconds) }))
+    .sort((a, b) => a.diff - b.diff);
+
+  if (ranked.length > 0) {
+    const topDiff = ranked[0].diff;
+    const winners = ranked.filter(g => g.diff === topDiff);
     winner = winners.map(g => g.name).join(" & ");
     winnerGuessSeconds = winners[0].guessSeconds;
     if (runningAvg !== null && Math.abs(winnerGuessSeconds - runningAvg) > THRESHOLD) {
@@ -218,14 +290,42 @@ export async function scoreSermon(
     }
   }
 
+  // Runner-up: first player whose diff is strictly greater than the winner's
+  let runnerUp: string | null = null;
+  let runnerUpGuessSeconds: number | null = null;
+  if (ranked.length > 0) {
+    const topDiff = ranked[0].diff;
+    const ru = ranked.find(g => g.diff > topDiff);
+    if (ru) { runnerUp = ru.name; runnerUpGuessSeconds = ru.guessSeconds; }
+  }
+
+  // Boldest call: furthest from running average
+  let boldestCall: { name: string; guessSeconds: number } | null = null;
+  if (runningAvg !== null && playerGuesses.length > 0) {
+    const boldest = playerGuesses.reduce((a, b) =>
+      Math.abs(a.guessSeconds - runningAvg) > Math.abs(b.guessSeconds - runningAvg) ? a : b
+    );
+    boldestCall = { name: boldest.name, guessSeconds: boldest.guessSeconds };
+  }
+
+  // Children's sermon correct callers
+  const childrensWinners: string[] = [];
+  if (hadChildrensSermon !== null) {
+    for (const g of playerGuesses) {
+      if (!g.childrensSermonBet) continue;
+      if (
+        (g.childrensSermonBet === "yes" && hadChildrensSermon) ||
+        (g.childrensSermonBet === "no" && !hadChildrensSermon)
+      ) childrensWinners.push(g.name);
+    }
+  }
+
   const resolution: Resolution = {
     date, durationSeconds, winner, winnerGuessSeconds, winnerPoints,
     resolvedAt: new Date().toISOString(),
+    runnerUp, runnerUpGuessSeconds, boldestCall, childrensWinners,
+    allGuesses: ranked.map(g => ({ name: g.name, guessSeconds: g.guessSeconds, diff: g.diff })),
   };
   await saveResolution(resolution);
-
-  // Also update sermon with hadChildrensSermon
-  void hadChildrensSermon; // handled in sermons route
-
   return resolution;
 }
